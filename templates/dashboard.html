@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NaijaTech Opps - CS Opportunities for Nigerians</title>
+    
+    <!-- Meta tags for SEO -->
+    <meta name="description" content="Aggregated and curated internships, scholarships, hackathons, and CS jobs open to Nigerian tech talents. Bookmark and share directly to LinkedIn.">
+    <meta name="keywords" content="Scholarships for Nigerians, Internships in Nigeria, Hackathons Africa, AI Competitions, CS Jobs Nigeria">
+    <meta name="author" content="NaijaTech Opps">
+    
+    <!-- Google Symbols (Icon library) -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Symbols:opsz,wght,FILL,GRAD@20..48,300..500,0..1,-50..200" />
+    
+    <!-- Custom Style Sheet -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+
+    <div class="app-container">
+        <!-- Dashboard Header -->
+        <header>
+            <div class="logo-section">
+                <h1>
+                    <i class="google-symbols" style="font-size: 2.8rem; background: linear-gradient(135deg, #a78bfa 0%, #06b6d4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">explore</i>
+                    NaijaTech Opps
+                </h1>
+                <p>Curated Tech Scholarships, Internships, Hackathons, and CS opportunities open to Nigerians 🇳🇬</p>
+            </div>
+            
+            <div class="actions-section">
+                <button class="btn" id="bookmark-toggle-btn">
+                    <i class="google-symbols">favorite_border</i> View Bookmarks
+                </button>
+                <button class="btn btn-primary" id="refresh-btn">
+                    <i class="google-symbols">sync</i> Sync Opportunities
+                </button>
+            </div>
+        </header>
+
+        <!-- Controls panel (Filters and Search) -->
+        <section class="controls-panel">
+            <div class="filter-group">
+                <button class="filter-btn active" data-category="all">All Opportunities</button>
+                {% for category in categories %}
+                <button class="filter-btn" data-category="{{ category }}">{{ category }}s</button>
+                {% endfor %}
+            </div>
+            
+            <div class="search-container">
+                <i class="google-symbols search-icon">search</i>
+                <input type="text" class="search-input" id="search-input" placeholder="Search opportunities, companies, skills...">
+            </div>
+        </section>
+
+        <!-- Main Opportunities Grid -->
+        <main class="opportunities-grid" id="opportunities-grid">
+            <!-- Opportunities will be injected here dynamically by app.js -->
+            <div class="empty-state">
+                <div class="loading-spinner" style="width: 40px; height: 40px;"></div>
+                <p style="margin-top: 1rem;">Loading opportunities dashboard...</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- LinkedIn Draft Modal -->
+    <div class="modal" id="linkedin-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📢 Generated LinkedIn Post Draft</h3>
+                <button class="close-modal" id="close-modal">&times;</button>
+            </div>
+            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">
+                Review and modify your post draft. Click "Copy Draft" and paste it directly into LinkedIn to share with your network!
+            </p>
+            <textarea class="post-area" id="post-area" spellcheck="false"></textarea>
+            <div class="modal-footer">
+                <button class="btn" onclick="document.getElementById('linkedin-modal').classList.remove('active')">Cancel</button>
+                <button class="btn btn-primary" id="copy-post-btn">
+                    <i class="google-symbols">content_copy</i> Copy Draft
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- JavaScript logic -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
