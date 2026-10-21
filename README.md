@@ -6,11 +6,11 @@ An AI-first web dashboard that aggregates tech opportunities open to Nigerians. 
 *   **CS/Tech Jobs** (Paystack, Flutterwave, Andela remote jobs, etc.)
 
 ## Key Features
-1.  **Glassmorphic Dark UI**: Premium, responsive dashboard with tailored HSL color codes and custom micro-animations.
+1.  **Glassmorphic Dark UI**: Premium, responsive dashboard with tailored HSL color codes, custom micro-animations, and a light mode toggle.
 2.  **Live Updates (Sync)**: Connects to popular platforms (Opportunities for Africans, Opportunity Desk) via standard WordPress RSS feeds with built-in fallback XML/regex parsing.
 3.  **Persisted SQLite Backend**: Seeds a high-quality starting list and updates local DB cache to ensure instant loading speeds.
 4.  **Flexible Filter & Search**: Instant filtering by category (Scholarships, Internships, Competitions, Jobs) or custom keyword search.
-5.  **Bookmarking System**: Save opportunities to a persistent bookmarks list linked directly to the SQLite backend.
+5.  **Bookmarking System**: Each visitor's bookmarks are saved privately in their own browser.
 6.  **LinkedIn Post Generator**: Generates engaging, formatted LinkedIn posts with emojis, hooks, and hashtags for any selected opportunity.
 
 ## Project Structure
@@ -25,7 +25,7 @@ An AI-first web dashboard that aggregates tech opportunities open to Nigerians. 
 
 ### 1. Install Dependencies
 ```bash
-pip install flask requests beautifulsoup4
+pip install -r requirements.txt
 ```
 
 ### 2. Run the Application
@@ -39,3 +39,14 @@ Open your browser and navigate to:
 ```
 http://127.0.0.1:5000
 ```
+
+## Deploying to Render
+The repo includes a `render.yaml`, so Render picks up the settings automatically.
+
+1. Sign in at [render.com](https://render.com) with GitHub.
+2. Click **New > Blueprint** and select this repository.
+3. Click **Apply**. Render installs the requirements and starts the app with `gunicorn`.
+
+Notes:
+*   On the free plan the SQLite file is reset on every restart or deploy. The app re-seeds the curated list and syncs the RSS feeds automatically on startup.
+*   The free plan sleeps after ~15 minutes without visitors, so the first visit afterwards takes up to a minute to load.

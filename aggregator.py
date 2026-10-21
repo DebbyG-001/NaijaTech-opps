@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import re
 import xml.etree.ElementTree as ET
@@ -6,7 +7,8 @@ import html
 import requests
 from bs4 import BeautifulSoup
 
-DATABASE = 'opportunities.db'
+# Absolute path so the app works no matter which directory it is started from
+DATABASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'opportunities.db')
 
 # Predefined high-quality opportunities for Nigerians (reliable seeds)
 CURATED_OPPORTUNITIES = [
@@ -140,16 +142,6 @@ def init_db():
         )
     ''')
     
-    # Create bookmarks table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS bookmarks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            opportunity_id INTEGER UNIQUE NOT NULL,
-            bookmarked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (opportunity_id) REFERENCES opportunities(id) ON DELETE CASCADE
-        )
-    ''')
-    
     # Seed if empty
     cursor.execute('SELECT COUNT(*) FROM opportunities')
     if cursor.fetchone()[0] == 0:
@@ -165,62 +157,28 @@ def init_db():
         
     conn.close()
 
-def get_opportunities(category_filter=None, show_bookmarked_only=False):
+def get_opportunities(category_filter=None):
     """Retrieves opportunities from the database with optional filtering."""
     conn = sqlite3.connect(DATABASE)
     # Return dictionary results for easy JSON serialization
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    
-    query = """
-        SELECT o.*, (b.id IS NOT NULL) AS is_bookmarked 
-        FROM opportunities o 
-        LEFT JOIN bookmarks b ON o.id = b.opportunity_id
-    """
+
+    query = "SELECT * FROM opportunities"
     params = []
-    conditions = []
-    
+
     if category_filter:
-        conditions.append("o.category = ?")
+        query += " WHERE category = ?"
         params.append(category_filter)
-        
-    if show_bookmarked_only:
-        conditions.append("b.id IS NOT NULL")
-        
-    if conditions:
-        query += " WHERE " + " AND ".join(conditions)
-        
-    query += " ORDER BY o.created_at DESC, o.id DESC"
-    
+
+    query += " ORDER BY created_at DESC, id DESC"
+
     cursor.execute(query, params)
     rows = cursor.fetchall()
-    
+
     results = [dict(row) for row in rows]
     conn.close()
     return results
-
-def toggle_bookmark(opportunity_id):
-    """Toggles bookmark status for a specific opportunity ID."""
-    conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
-    
-    cursor.execute('SELECT id FROM bookmarks WHERE opportunity_id = ?', (opportunity_id,))
-    bookmark = cursor.fetchone()
-    
-    bookmarked = False
-    if bookmark:
-        cursor.execute('DELETE FROM bookmarks WHERE opportunity_id = ?', (opportunity_id,))
-        bookmarked = False
-    else:
-        # Check if opportunity exists
-        cursor.execute('SELECT id FROM opportunities WHERE id = ?', (opportunity_id,))
-        if cursor.fetchone():
-            cursor.execute('INSERT INTO bookmarks (opportunity_id) VALUES (?)', (opportunity_id,))
-            bookmarked = True
-            
-    conn.commit()
-    conn.close()
-    return bookmarked
 
 def clean_html(raw_html):
     """Removes HTML tags and cleans up strings."""
@@ -271,6 +229,7 @@ def extract_organization(title):
 def parse_rss_feed(url, source_name):
     """Fetches and parses a standard RSS feed, returning opportunities."""
     opportunities = []
+    response = None
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     }
@@ -333,6 +292,9 @@ def parse_rss_feed(url, source_name):
             })
     except Exception as e:
         print(f"Error parsing feed {url} via ElementTree: {e}")
+        if response is None:
+            # The request itself failed, so there is nothing to fall back on
+            return opportunities
         # Try a regex-based fallback if XML parsing fails due to malformed XML characters
         try:
             # Simple regex search for <item> blocks

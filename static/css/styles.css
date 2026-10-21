@@ -539,3 +539,42 @@ header {
         grid-template-columns: 1fr;
     }
 }
+
+/* Light Mode (toggled from the header button, remembered per browser) */
+body.light-mode {
+    --bg-dark: #f1f5f9;
+    --bg-card: rgba(255, 255, 255, 0.85);
+    --border-color: rgba(15, 23, 42, 0.12);
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #64748b;
+    --box-shadow-glow: 0 8px 32px 0 rgba(15, 23, 42, 0.08);
+    background-image:
+        radial-gradient(at 0% 0%, rgba(139, 92, 246, 0.08) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(6, 182, 212, 0.08) 0px, transparent 50%);
+}
+
+body.light-mode .btn:not(.btn-primary),
+body.light-mode .category-tag {
+    background: rgba(15, 23, 42, 0.04);
+}
+
+body.light-mode .btn:not(.btn-primary):hover,
+body.light-mode .filter-btn:hover {
+    background: rgba(15, 23, 42, 0.08);
+    border-color: rgba(15, 23, 42, 0.2);
+}
+
+body.light-mode .search-input,
+body.light-mode .post-area {
+    background: rgba(255, 255, 255, 0.9);
+}
+
+body.light-mode .modal-content {
+    background: rgba(255, 255, 255, 0.97);
+    border-color: var(--border-color);
+}
+
+body.light-mode .btn-primary {
+    color: #ffffff;
+}

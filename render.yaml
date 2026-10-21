@@ -1,0 +1,10 @@
+# Render deployment settings (https://render.com/docs/blueprint-spec)
+services:
+  - type: web
+    name: naijatech-opps
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # One worker keeps the SQLite file safe from concurrent writers; threads handle parallel requests.
+    startCommand: gunicorn app:app --workers 1 --threads 4 --timeout 60 --bind 0.0.0.0:$PORT
+    healthCheckPath: /healthz

@@ -1,12 +1,38 @@
 from flask import Flask, render_template, jsonify, request
 import aggregator
+import os
 import sqlite3
+import threading
+import time
 
 app = Flask(__name__)
-DATABASE = 'opportunities.db'
+DATABASE = aggregator.DATABASE
+
+# Minimum gap between feed syncs, so repeated clicks can't hammer the source sites
+SYNC_COOLDOWN_SECONDS = 10 * 60
+_sync_lock = threading.Lock()
+_last_sync_time = 0.0
 
 # Ensure the database is initialized on startup
 aggregator.init_db()
+
+def run_sync():
+    """Fetches new opportunities unless a sync ran recently or is already running.
+    Returns the number of new items, or None if the sync was skipped."""
+    global _last_sync_time
+    if not _sync_lock.acquire(blocking=False):
+        return None
+    try:
+        if time.time() - _last_sync_time < SYNC_COOLDOWN_SECONDS:
+            return None
+        new_count = aggregator.fetch_and_update_opportunities()
+        _last_sync_time = time.time()
+        return new_count
+    finally:
+        _sync_lock.release()
+
+# Pull fresh listings in the background on startup; the hosted disk is wiped on every restart
+threading.Thread(target=run_sync, daemon=True).start()
 
 def query_db(query, args=(), one=False):
     """Helper to query the database and return dictionary results."""
@@ -29,13 +55,11 @@ def index():
 def api_opportunities():
     """API endpoint to get opportunities with optional filters."""
     category = request.args.get('category')
-    bookmarks_only = request.args.get('bookmarks_only') == 'true'
     search_query = request.args.get('search')
-    
-    # Retrieve all opportunities with bookmark status
+
+    # Bookmarks are stored per visitor in the browser, so the server only returns listings
     opps = aggregator.get_opportunities(
-        category_filter=category if category in ['Scholarship', 'Internship', 'Competition', 'Job'] else None,
-        show_bookmarked_only=bookmarks_only
+        category_filter=category if category in ['Scholarship', 'Internship', 'Competition', 'Job'] else None
     )
     
     # Filter by search term if provided
@@ -50,29 +74,22 @@ def api_opportunities():
         
     return jsonify(opps)
 
-@app.route('/api/bookmarks/toggle', methods=['POST'])
-def api_toggle_bookmark():
-    """API endpoint to toggle a bookmark."""
-    data = request.get_json() or {}
-    opportunity_id = data.get('opportunity_id')
-    
-    if not opportunity_id:
-        return jsonify({"error": "Missing opportunity_id"}), 400
-        
-    try:
-        is_bookmarked = aggregator.toggle_bookmark(int(opportunity_id))
-        return jsonify({"success": True, "bookmarked": is_bookmarked})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+@app.route('/healthz')
+def healthz():
+    """Health check used by the hosting platform."""
+    return jsonify({"status": "ok"})
 
 @app.route('/api/opportunities/refresh', methods=['POST'])
 def api_refresh():
     """API endpoint to trigger fetching new opportunities."""
     try:
-        new_count = aggregator.fetch_and_update_opportunities()
+        new_count = run_sync()
+        if new_count is None:
+            return jsonify({"success": True, "new_count": 0, "skipped": True})
         return jsonify({"success": True, "new_count": new_count})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        app.logger.exception("Sync failed")
+        return jsonify({"error": "Sync failed. Please try again later."}), 500
 
 @app.route('/api/linkedin/generate', methods=['POST'])
 def api_generate_linkedin():
@@ -137,5 +154,5 @@ This program is open to applicants from Nigeria. It offers a structured way to b
     return jsonify({"success": True, "post": linkedin_post})
 
 if __name__ == '__main__':
-    # Run the Flask app on localhost
-    app.run(debug=True, port=5000)
+    # Local development server; production runs under gunicorn (see render.yaml)
+    app.run(debug=True, port=5000, use_reloader=False)
