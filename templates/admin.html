@@ -112,6 +112,28 @@
             </form>
         </section>
 
+        <!-- WhatsApp channel queue -->
+        <section class="admin-card" id="wa-card" data-site-url="{{ site_url }}" data-channel-url="{{ whatsapp_channel_url }}">
+            <div class="admin-row admin-toolbar">
+                <h3 style="margin: 0;"><i class="google-symbols">campaign</i> WhatsApp channel <span id="wa-count" class="admin-hint" style="margin: 0;"></span></h3>
+                <div class="admin-row">
+                    <label class="admin-hint" for="wa-digest-size" style="margin: 0;">Roundup of</label>
+                    <select class="search-input admin-input admin-small" id="wa-digest-size">
+                        <option>3</option><option selected>5</option><option>8</option><option>10</option>
+                    </select>
+                    <button class="btn" id="wa-digest-btn"><i class="google-symbols">format_list_bulleted</i> Copy roundup</button>
+                    <button class="btn" id="wa-clear-btn" title="Mark everything currently in the queue as handled">Clear backlog</button>
+                </div>
+            </div>
+            <p class="admin-hint">New opportunities wait here with a ready-to-post message. Copy it, paste it into the channel, then mark it as posted.
+                {% if not whatsapp_channel_url %}Add a <code>WHATSAPP_CHANNEL_URL</code> setting on Render to show a "Join our WhatsApp channel" button on the site.{% endif %}</p>
+            <div id="wa-list" class="admin-list"></div>
+            <details class="wa-recent">
+                <summary>Recently posted or skipped</summary>
+                <div id="wa-recent-list" class="admin-list"></div>
+            </details>
+        </section>
+
         <!-- Listings -->
         <section class="admin-card">
             <div class="admin-row admin-toolbar">
@@ -132,6 +154,7 @@
     <div class="toast-container" id="toast-container"></div>
     {% if logged_in %}
     <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/whatsapp.js') }}"></script>
     {% endif %}
 </body>
 </html>

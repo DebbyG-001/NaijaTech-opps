@@ -26,7 +26,13 @@ EXTRA_COLUMNS = {
     'apply_link': 'TEXT',
     'is_verified': 'INTEGER DEFAULT 0',
     'status': "TEXT DEFAULT 'published'",
+    # WhatsApp channel queue: NULL = not shared yet, 'posted' or 'skipped' once handled
+    'whatsapp_status': 'TEXT',
+    'whatsapp_at': 'TEXT',
 }
+
+WHATSAPP_POSTED = 'posted'
+WHATSAPP_SKIPPED = 'skipped'
 
 STATUS_PUBLISHED = 'published'
 STATUS_PENDING = 'pending'

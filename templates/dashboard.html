@@ -30,6 +30,11 @@
             </div>
             
             <div class="actions-section">
+                {% if whatsapp_channel_url %}
+                <a class="btn btn-whatsapp" href="{{ whatsapp_channel_url }}" target="_blank" rel="noopener noreferrer">
+                    <i class="google-symbols">campaign</i> Join our WhatsApp channel
+                </a>
+                {% endif %}
                 <button class="btn" id="theme-toggle-btn" title="Toggle light/dark mode" aria-label="Toggle light/dark mode">
                     <i class="google-symbols" id="theme-icon">light_mode</i>
                 </button>

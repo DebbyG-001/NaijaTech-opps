@@ -877,3 +877,59 @@ body.light-mode .verified-badge { color: #047857; }
 
 body.light-mode .deadline-badge.expired { color: #b91c1c; }
 body.light-mode .deadline-badge.soon { color: #b45309; }
+
+/* WhatsApp */
+.btn-whatsapp {
+    background: #25d366;
+    border-color: #25d366;
+    color: #06281a;
+    font-weight: 600;
+}
+
+.btn-whatsapp:hover {
+    background: #1ebe5b;
+    border-color: #1ebe5b;
+}
+
+body.light-mode .btn-whatsapp {
+    background: #25d366;
+    color: #06281a;
+}
+
+.search-input.admin-input.admin-small {
+    width: auto;
+    padding: 0.5rem 0.6rem;
+}
+
+.wa-preview {
+    margin-top: 0.5rem;
+}
+
+.wa-preview summary,
+.wa-recent summary {
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.wa-preview .wa-text {
+    margin-top: 0.5rem;
+    width: 100%;
+    min-width: 320px;
+    font-size: 0.85rem;
+    white-space: pre-wrap;
+}
+
+.wa-item .admin-item-main {
+    flex: 1;
+}
+
+.wa-recent {
+    margin-top: 1rem;
+}
+
+@media (max-width: 768px) {
+    .wa-preview .wa-text {
+        min-width: 0;
+    }
+}

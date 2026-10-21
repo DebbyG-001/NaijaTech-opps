@@ -1,4 +1,5 @@
 from flask import Flask, render_template, jsonify, request, session, redirect, url_for
+from datetime import datetime, timezone
 from functools import wraps
 import aggregator
 import db
@@ -23,6 +24,13 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=60 * 60 * 12,
 )
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', '')
+
+# Optional link to the team's WhatsApp channel, shown as a "Join" button on the site
+WHATSAPP_CHANNEL_URL = os.environ.get('WHATSAPP_CHANNEL_URL', '').strip()
+if not WHATSAPP_CHANNEL_URL.startswith('https://'):
+    WHATSAPP_CHANNEL_URL = ''
+# Public address of the site, used in WhatsApp messages
+SITE_URL = os.environ.get('SITE_URL', 'https://naijatech-opps.onrender.com').rstrip('/')
 
 # Minimum gap between feed syncs, so repeated clicks can't hammer the source sites
 SYNC_COOLDOWN_SECONDS = 10 * 60
@@ -69,7 +77,7 @@ start_background_sync()
 def index():
     """Main dashboard page."""
     # We pass categories to populate filters and stats
-    return render_template('dashboard.html', categories=CATEGORIES)
+    return render_template('dashboard.html', categories=CATEGORIES, whatsapp_channel_url=WHATSAPP_CHANNEL_URL)
 
 @app.route('/api/opportunities')
 def api_opportunities():
@@ -204,7 +212,8 @@ def admin_required(view):
 @app.route('/admin')
 def admin_page():
     return render_template('admin.html', logged_in=_is_admin(), configured=bool(ADMIN_PASSWORD),
-                           error=request.args.get('error'), categories=CATEGORIES)
+                           error=request.args.get('error'), categories=CATEGORIES,
+                           site_url=SITE_URL, whatsapp_channel_url=WHATSAPP_CHANNEL_URL)
 
 @app.route('/admin/login', methods=['POST'])
 def admin_login():
@@ -333,6 +342,36 @@ def admin_delete(opp_id):
     if not db.execute("DELETE FROM opportunities WHERE id = ?", (opp_id,)):
         return jsonify({"error": "Opportunity not found."}), 404
     return jsonify({"success": True})
+
+@app.route('/admin/api/whatsapp')
+@admin_required
+def admin_whatsapp_queue():
+    """Published, still-open listings not yet shared to the channel, plus recently handled ones."""
+    listings = aggregator.get_opportunities()
+    queue = [o for o in listings if not o.get('whatsapp_status') and not o['is_expired']]
+    handled = [o for o in listings if o.get('whatsapp_status')]
+    handled.sort(key=lambda o: o.get('whatsapp_at') or '', reverse=True)
+    return jsonify({"queue": queue, "recent": handled[:15]})
+
+@app.route('/admin/api/whatsapp/mark', methods=['POST'])
+@admin_required
+def admin_whatsapp_mark():
+    """Marks listings as posted or skipped, or puts them back in the queue (action='undo')."""
+    data = request.get_json() or {}
+    action = data.get('action')
+    try:
+        ids = [int(i) for i in data.get('ids') or []][:500]
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid ids."}), 400
+    if action not in (db.WHATSAPP_POSTED, db.WHATSAPP_SKIPPED, 'undo') or not ids:
+        return jsonify({"error": "Invalid request."}), 400
+
+    status = None if action == 'undo' else action
+    stamp = None if action == 'undo' else datetime.now(timezone.utc).isoformat(timespec='seconds')
+    placeholders = ', '.join('?' for _ in ids)
+    updated = db.execute(f"UPDATE opportunities SET whatsapp_status = ?, whatsapp_at = ? WHERE id IN ({placeholders})",
+                         (status, stamp, *ids))
+    return jsonify({"success": True, "updated": updated})
 
 @app.route('/admin/api/sync', methods=['POST'])
 @admin_required

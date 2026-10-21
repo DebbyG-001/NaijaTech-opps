@@ -186,6 +186,8 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             listings = await api('/admin/api/opportunities');
             renderListings();
+            // Lets the WhatsApp queue refresh after approvals, edits, and syncs
+            window.dispatchEvent(new Event('listings-changed'));
         } catch (err) {
             list.innerHTML = `<p class="admin-error">${escapeHtml(err.message)}</p>`;
         }

@@ -16,12 +16,13 @@ An AI-first web dashboard that aggregates tech opportunities open to Nigerians. 
 8.  **Opportunity Details**: Eligibility, required documents, apply link, and a Verified badge for checked listings.
 9.  **HorizonScholar Import**: Pulls the latest results of the `seyi_glory/horizon-scholar-scraper` Apify actor. Trusted results go live; the rest wait for admin review.
 10. **Admin Panel** (`/admin`): Paste a link and Gemini reads the page and drafts the listing for review. Approve, edit, unpublish, or delete listings.
+11. **WhatsApp Channel Queue**: Each new published opportunity gets a ready-to-post WhatsApp message (copy, or open in WhatsApp), with posted/skipped tracking, undo, a multi-opportunity roundup, and a "Join our WhatsApp channel" button on the site.
 
 ## Project Structure
 *   `app.py`: Flask backend, routing, API endpoints, and LinkedIn generation logic.
 *   `aggregator.py`: Predefined opportunity seeds, RSS XML downloading, and keyword classification.
 *   `extractor.py`: Reads a pasted link and extracts opportunity details with Gemini.
-*   `templates/admin.html`, `static/js/admin.js`: Admin panel.
+*   `templates/admin.html`, `static/js/admin.js`, `static/js/whatsapp.js`: Admin panel and WhatsApp queue.
 *   `deadlines.py`: Reads free-text deadlines and decides when a listing has expired.
 *   `db.py`: Database access. Uses Postgres when `DATABASE_URL` is set, otherwise the local SQLite file.
 *   `templates/dashboard.html`: The HTML template structured with Material Symbols and responsive container layouts.
@@ -68,6 +69,8 @@ Set the `DATABASE_URL` environment variable on Render to a Postgres connection s
 | `GEMINI_MODEL` | Optional | Gemini model ID (default `gemini-3.8-flash`). |
 | `APIFY_TOKEN` | Optional | Apify API token for importing HorizonScholar results. |
 | `APIFY_ACTOR` | Optional | Actor to import from (default `seyi_glory~horizon-scholar-scraper`). |
+| `WHATSAPP_CHANNEL_URL` | Optional | Invite link to the WhatsApp channel (`https://whatsapp.com/channel/...`). Shows a "Join" button on the site. |
+| `SITE_URL` | Optional | Public site address used in WhatsApp messages (default `https://naijatech-opps.onrender.com`). |
 
 Notes:
 *   The app syncs every source automatically on startup, and in the background whenever someone clicks Sync (at most every 10 minutes). Schedule the Apify actor itself in the Apify console.
