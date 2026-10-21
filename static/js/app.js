@@ -16,11 +16,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const themeToggleBtn = document.getElementById('theme-toggle-btn');
     const themeIcon = document.getElementById('theme-icon');
     
-    // Modal Elements
-    const linkedinModal = document.getElementById('linkedin-modal');
-    const closeModalBtn = document.getElementById('close-modal');
-    const postArea = document.getElementById('post-area');
-    const copyPostBtn = document.getElementById('copy-post-btn');
     
     // Details modal
     const detailsModal = document.getElementById('details-modal');
@@ -126,18 +121,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Close Modal Events
-    closeModalBtn.addEventListener('click', () => {
-        linkedinModal.classList.remove('active');
-    });
-
     document.getElementById('close-details').addEventListener('click', () => {
         detailsModal.classList.remove('active');
     });
 
     window.addEventListener('click', (e) => {
-        if (e.target === linkedinModal) {
-            linkedinModal.classList.remove('active');
-        }
         if (e.target === detailsModal) {
             detailsModal.classList.remove('active');
         }
@@ -145,31 +133,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-            linkedinModal.classList.remove('active');
             detailsModal.classList.remove('active');
         }
     });
 
-    // Copy Post to Clipboard
-    copyPostBtn.addEventListener('click', () => {
-        postArea.select();
-        postArea.setSelectionRange(0, 99999); // For mobile devices
-        
-        navigator.clipboard.writeText(postArea.value)
-            .then(() => {
-                showToast('Post copied to clipboard!');
-                copyPostBtn.innerHTML = '<i class="google-symbols">check</i> Copied!';
-                copyPostBtn.style.background = '#10b981';
-                setTimeout(() => {
-                    copyPostBtn.innerHTML = '<i class="google-symbols">content_copy</i> Copy Draft';
-                    copyPostBtn.style.background = '';
-                }, 2000);
-            })
-            .catch(err => {
-                showToast('Failed to copy text.', 'error');
-                console.error(err);
-            });
-    });
 
     // Core Fetch Function
     function fetchOpportunities() {
@@ -263,11 +230,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>
                 <div class="card-actions">
-                    <button class="btn details-btn" style="flex: 1.2;">
+                    <button class="btn btn-primary details-btn" style="flex: 1; justify-content: center;">
                         <i class="google-symbols" style="font-size: 1rem;">info</i> View Details
-                    </button>
-                    <button class="btn btn-primary linkedin-gen-btn" data-id="${opp.id}">
-                        <i class="google-symbols" style="font-size: 1.1rem;">share</i> LinkedIn Post
                     </button>
                 </div>
             `;
@@ -278,12 +242,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             
             card.querySelector('.details-btn').addEventListener('click', () => openDetails(opp));
-
-            card.querySelector('.linkedin-gen-btn').addEventListener('click', (e) => {
-                const btn = e.currentTarget;
-                const oppId = btn.dataset.id;
-                generateLinkedInPost(oppId, btn);
-            });
 
             grid.appendChild(card);
         });
@@ -396,37 +354,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             return '#';
         }
-    }
-
-    // Generate LinkedIn Post Draft
-    function generateLinkedInPost(oppId, btnElement) {
-        const originalContent = btnElement.innerHTML;
-        btnElement.disabled = true;
-        btnElement.innerHTML = '<div class="loading-spinner" style="width: 14px; height: 14px;"></div> Generating...';
-
-        fetch('/api/linkedin/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ opportunity_id: oppId })
-        })
-        .then(res => res.json())
-        .then(data => {
-            btnElement.disabled = false;
-            btnElement.innerHTML = originalContent;
-            
-            if (data.success) {
-                postArea.value = data.post;
-                linkedinModal.classList.add('active');
-            } else {
-                showToast(`Generation failed: ${data.error}`, 'error');
-            }
-        })
-        .catch(err => {
-            btnElement.disabled = false;
-            btnElement.innerHTML = originalContent;
-            showToast('Failed to connect to generator api.', 'error');
-            console.error(err);
-        });
     }
 
     // Toast Alert Notification System

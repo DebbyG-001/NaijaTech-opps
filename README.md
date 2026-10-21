@@ -11,7 +11,7 @@ An AI-first web dashboard that aggregates tech opportunities open to Nigerians. 
 3.  **Persistent Database**: Postgres (Neon) in production, a local SQLite file in development. Seeds a high-quality starting list on first run.
 4.  **Flexible Filter & Search**: Instant filtering by category (Scholarships, Internships, Competitions, Jobs) or custom keyword search.
 5.  **Bookmarking System**: Each visitor's bookmarks are saved privately in their own browser.
-6.  **LinkedIn Post Generator**: Generates engaging, formatted LinkedIn posts with emojis, hooks, and hashtags for any selected opportunity.
+6.  **LinkedIn Post Generator** (admin only, `/admin/api/linkedin/generate`): Builds a formatted LinkedIn post for an opportunity.
 7.  **Deadline Tracking**: Listings show "N days left" in their final week and "Deadline passed" once it goes by. Three days after the deadline they are hidden from the site (admins still see them).
 8.  **Opportunity Details**: Eligibility, required documents, apply link, and a Verified badge for checked listings.
 9.  **HorizonScholar Import**: Pulls the latest results of the `seyi_glory/horizon-scholar-scraper` Apify actor. Trusted results go live; the rest wait for admin review.

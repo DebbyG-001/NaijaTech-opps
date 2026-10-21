@@ -113,9 +113,12 @@ def api_refresh():
     result = start_background_sync()
     return jsonify({"success": True, "started": result == 'started', "skipped": result != 'started'})
 
-@app.route('/api/linkedin/generate', methods=['POST'])
+@app.route('/admin/api/linkedin/generate', methods=['POST'])
 def api_generate_linkedin():
-    """API endpoint to generate a LinkedIn post draft for a given opportunity."""
+    """Admin-only: generates a LinkedIn post draft for a given opportunity.
+    (Removed from the public site; posting is done by admins.)"""
+    if not _is_admin() or request.headers.get('X-Requested-With') != 'fetch':
+        return jsonify({"error": "Please log in again."}), 401
     data = request.get_json() or {}
     opportunity_id = data.get('opportunity_id')
 
