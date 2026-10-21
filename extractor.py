@@ -19,8 +19,13 @@ from bs4 import BeautifulSoup
 CATEGORIES = ['Scholarship', 'Internship', 'Competition', 'Job']
 
 GEMINI_MODEL = os.environ.get('GEMINI_MODEL', 'gemini-3.8-flash')
-# Tried in order when a model is unavailable for this API key
-GEMINI_FALLBACK_MODELS = ['gemini-3.6-flash', 'gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-2.5-flash-lite']
+# Tried in order when a model is unavailable or overloaded; the widely available 2.5 Flash goes first
+GEMINI_FALLBACK_MODELS = ['gemini-2.5-flash', 'gemini-3.6-flash', 'gemini-3-flash-preview', 'gemini-2.5-flash-lite']
+# Stay inside the server's 60-second request limit across all attempts
+# (fetching the page itself can take up to 15 seconds before this starts)
+GEMINI_TIME_BUDGET_SECONDS = 35
+# "High demand" errors are usually brief, so a busy model gets one more try after a pause
+GEMINI_BUSY_STATUSES = (500, 502, 503, 504)
 GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent'
 
 MAX_PAGE_BYTES = 3 * 1024 * 1024
@@ -185,16 +190,32 @@ def _parse_json_reply(data):
 def _call_gemini(prompt, api_key):
     json_mode = {'responseMimeType': 'application/json', 'temperature': 0.1}
     problems = []
+    deadline = time.monotonic() + GEMINI_TIME_BUDGET_SECONDS
     for model in dict.fromkeys([GEMINI_MODEL] + GEMINI_FALLBACK_MODELS):
-        # JSON mode first; if Google rejects that setting, retry the model without it
-        for config in (json_mode, {'temperature': 0.1}):
+        if time.monotonic() > deadline - 5:
+            problems.append('stopped trying other models to avoid timing out')
+            break
+        # JSON mode first; if Google rejects that setting, retry the model without it.
+        # A busy model is retried once (same config) after a short pause.
+        attempts = [json_mode, {'temperature': 0.1}]
+        busy_retried = False
+        while attempts:
+            config = attempts[0]
             body = {'contents': [{'role': 'user', 'parts': [{'text': prompt}]}], 'generationConfig': config}
+            remaining = deadline - time.monotonic()
+            if remaining < 5:
+                break
             try:
-                response = requests.post(GEMINI_URL.format(model=model), json=body, timeout=60,
+                response = requests.post(GEMINI_URL.format(model=model), json=body, timeout=min(30, remaining),
                                          headers={'x-goog-api-key': api_key})
             except requests.RequestException as e:
                 problems.append(f'{model}: could not connect ({e.__class__.__name__})')
                 break
+            if response.status_code in GEMINI_BUSY_STATUSES and not busy_retried and remaining > 15:
+                busy_retried = True
+                print(f"Gemini {model} busy ({response.status_code}), retrying shortly")
+                time.sleep(2)
+                continue
             if response.status_code == 429:
                 raise ExtractionError('The AI is rate-limited right now (free tier limit). Wait a minute and try again.')
             if response.status_code in (401, 403) or (response.status_code == 400 and 'api key' in response.text.lower()):
@@ -204,9 +225,12 @@ def _call_gemini(prompt, api_key):
                                       'Check GEMINI_API_KEY on Render.')
             if response.status_code == 400 and config is json_mode:
                 print(f"Gemini {model} rejected JSON mode, retrying without it: {_google_error(response)}")
+                attempts.pop(0)
                 continue
             if response.status_code >= 400:
-                problems.append(f'{model}: {response.status_code} {_google_error(response)}')
+                busy = response.status_code in GEMINI_BUSY_STATUSES
+                problems.append(f'{model}: ' + ('busy (high demand)' if busy else
+                                                f'{response.status_code} {_google_error(response)[:120]}'))
                 break
             result, problem = _parse_json_reply(response.json())
             if result is not None:
@@ -214,8 +238,12 @@ def _call_gemini(prompt, api_key):
             problems.append(f'{model}: {problem}')
             break
     print("Gemini extraction failed: " + ' | '.join(problems))
-    reason = problems[0] if problems else 'unknown error'
-    raise ExtractionError(f"The AI couldn't read this page ({reason[:200]}). You can still fill in the details by hand.")
+    model_problems = [p for p in problems if p.startswith('gemini')]
+    if model_problems and all('busy' in p for p in model_problems):
+        raise ExtractionError('Gemini is overloaded right now (Google says this is temporary). '
+                              'Try again in a few minutes, or fill in the details by hand.')
+    reasons = '; '.join(problems) or 'unknown error'
+    raise ExtractionError(f"The AI couldn't read this page. {reasons[:400]}. You can still fill in the details by hand.")
 
 
 def _as_list(value):
