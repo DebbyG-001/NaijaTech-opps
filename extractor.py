@@ -10,6 +10,7 @@ import json
 import os
 import re
 import socket
+import time
 from urllib.parse import urljoin, urlparse
 
 import requests
@@ -31,14 +32,28 @@ class ExtractionError(Exception):
     """A problem worth showing to the admin as-is."""
 
 
+def normalize_url(url):
+    """Adds https:// to links pasted without a scheme, e.g. 'bit.ly/abc' or 'www.site.com/x'."""
+    url = (url or '').strip()
+    if url and not re.match(r'^[a-z][a-z0-9+.-]*://', url, re.IGNORECASE):
+        url = 'https://' + url.lstrip('/')
+    return url
+
+
 def _check_public_url(url):
     """Rejects non-http(s) links and links that resolve to private/internal addresses."""
     parsed = urlparse(url)
     if parsed.scheme not in ('http', 'https') or not parsed.hostname:
         raise ExtractionError('Please paste a full link starting with http:// or https://')
-    try:
-        infos = socket.getaddrinfo(parsed.hostname, parsed.port or (443 if parsed.scheme == 'https' else 80))
-    except socket.gaierror:
+    port = parsed.port or (443 if parsed.scheme == 'https' else 80)
+    infos = None
+    for attempt in range(2):  # one retry rides out brief DNS hiccups
+        try:
+            infos = socket.getaddrinfo(parsed.hostname, port)
+            break
+        except socket.gaierror:
+            time.sleep(1)
+    if not infos:
         raise ExtractionError("That website couldn't be found. Check the link and try again.")
     for info in infos:
         ip = ipaddress.ip_address(info[4][0])
@@ -60,6 +75,9 @@ def fetch_page(url):
         if response.is_redirect:
             current = urljoin(current, response.headers.get('Location', ''))
             continue
+        if response.status_code in (404, 410):
+            raise ExtractionError("That link doesn't exist (page not found). Check it for typos: "
+                                  "short links like bit.ly are case-sensitive.")
         if response.status_code >= 400:
             raise ExtractionError(f'The page returned an error ({response.status_code}). '
                                   'It may need a login or be blocking automated access.')
@@ -165,8 +183,8 @@ def _as_list(value):
 
 def extract_opportunity(url):
     """Returns a draft opportunity dict for the admin to review. Raises ExtractionError."""
-    url = (url or '').strip()
-    final_url, html_text = fetch_page(url)
+    # Short links (bit.ly etc.) are followed, so the saved link is the real destination
+    final_url, html_text = fetch_page(normalize_url(url))
     meta, text = page_to_text(html_text)
 
     draft = {

@@ -52,7 +52,7 @@
             <h3><i class="google-symbols">add_link</i> Add an opportunity from a link</h3>
             <p class="admin-hint">Paste a link to a hackathon, scholarship, internship, or job. The details are filled in for you to check before publishing.</p>
             <div class="admin-row">
-                <input class="search-input admin-input" type="url" id="extract-url" placeholder="https://example.com/some-hackathon">
+                <input class="search-input admin-input" type="text" inputmode="url" id="extract-url" placeholder="Paste a link, e.g. bit.ly/abc or https://example.com/hackathon">
                 <button class="btn btn-primary" id="extract-btn"><i class="google-symbols">auto_awesome</i> Read link</button>
                 <button class="btn" id="manual-btn">Fill in by hand</button>
             </div>
@@ -82,11 +82,11 @@
                     </div>
                     <div class="admin-field">
                         <label class="admin-label" for="f-apply-link">Apply link</label>
-                        <input class="search-input admin-input" id="f-apply-link" type="url" placeholder="Where people apply">
+                        <input class="search-input admin-input" id="f-apply-link" type="text" inputmode="url" placeholder="Where people apply">
                     </div>
                     <div class="admin-field admin-span">
                         <label class="admin-label" for="f-url">Opportunity page link *</label>
-                        <input class="search-input admin-input" id="f-url" type="url" required>
+                        <input class="search-input admin-input" id="f-url" type="text" inputmode="url" required>
                     </div>
                     <div class="admin-field admin-span">
                         <label class="admin-label" for="f-description">Summary</label>
