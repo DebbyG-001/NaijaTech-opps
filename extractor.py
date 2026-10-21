@@ -19,7 +19,8 @@ from bs4 import BeautifulSoup
 CATEGORIES = ['Scholarship', 'Internship', 'Competition', 'Job']
 
 GEMINI_MODEL = os.environ.get('GEMINI_MODEL', 'gemini-3.8-flash')
-GEMINI_FALLBACK_MODEL = 'gemini-2.5-flash'
+# Tried in order when a model is unavailable for this API key
+GEMINI_FALLBACK_MODELS = ['gemini-3.6-flash', 'gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-2.5-flash-lite']
 GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent'
 
 MAX_PAGE_BYTES = 3 * 1024 * 1024
@@ -156,38 +157,65 @@ Page content:
 {text}"""
 
 
+def _google_error(response):
+    """Google's own explanation from an error response, e.g. 'API key not valid...'."""
+    try:
+        return response.json().get('error', {}).get('message') or response.text[:200]
+    except ValueError:
+        return response.text[:200]
+
+
+def _parse_json_reply(data):
+    """Pulls the JSON object out of a generateContent reply. Returns (dict or None, problem)."""
+    if (data.get('promptFeedback') or {}).get('blockReason'):
+        return None, f"blocked by Google ({data['promptFeedback']['blockReason']})"
+    candidate = (data.get('candidates') or [{}])[0]
+    parts = (candidate.get('content') or {}).get('parts') or []
+    # Thinking models may include their reasoning as separate parts; only the answer matters
+    raw = ''.join(p.get('text', '') for p in parts if not p.get('thought')).strip()
+    match = re.search(r'\{.*\}', raw, re.DOTALL)
+    if not match:
+        return None, f"no answer returned (finish reason: {candidate.get('finishReason', 'unknown')})"
+    try:
+        return json.loads(match.group(0)), None
+    except ValueError:
+        return None, 'the answer was not valid JSON'
+
+
 def _call_gemini(prompt, api_key):
-    body = {
-        'contents': [{'role': 'user', 'parts': [{'text': prompt}]}],
-        'generationConfig': {'responseMimeType': 'application/json', 'temperature': 0.1},
-    }
-    last_error = None
-    for model in dict.fromkeys([GEMINI_MODEL, GEMINI_FALLBACK_MODEL]):
-        try:
-            response = requests.post(GEMINI_URL.format(model=model), json=body, timeout=60,
-                                     headers={'x-goog-api-key': api_key})
-        except requests.RequestException as e:
-            last_error = str(e)
-            continue
-        if response.status_code == 404:
-            last_error = f'model {model} not found'
-            continue
-        if response.status_code == 429:
-            raise ExtractionError('The AI is rate-limited right now. Wait a minute and try again.')
-        if response.status_code >= 400:
-            last_error = f'{response.status_code}: {response.text[:300]}'
-            print(f"Gemini error with {model}: {last_error}")
-            continue
-        data = response.json()
-        parts = (data.get('candidates') or [{}])[0].get('content', {}).get('parts', [])
-        raw = ''.join(p.get('text', '') for p in parts).strip()
-        match = re.search(r'\{.*\}', raw, re.DOTALL)
-        if not match:
-            last_error = 'no JSON in response'
-            continue
-        return json.loads(match.group(0))
-    print(f"Gemini extraction failed: {last_error}")
-    raise ExtractionError("The AI couldn't read this page. You can still fill in the details by hand.")
+    json_mode = {'responseMimeType': 'application/json', 'temperature': 0.1}
+    problems = []
+    for model in dict.fromkeys([GEMINI_MODEL] + GEMINI_FALLBACK_MODELS):
+        # JSON mode first; if Google rejects that setting, retry the model without it
+        for config in (json_mode, {'temperature': 0.1}):
+            body = {'contents': [{'role': 'user', 'parts': [{'text': prompt}]}], 'generationConfig': config}
+            try:
+                response = requests.post(GEMINI_URL.format(model=model), json=body, timeout=60,
+                                         headers={'x-goog-api-key': api_key})
+            except requests.RequestException as e:
+                problems.append(f'{model}: could not connect ({e.__class__.__name__})')
+                break
+            if response.status_code == 429:
+                raise ExtractionError('The AI is rate-limited right now (free tier limit). Wait a minute and try again.')
+            if response.status_code in (401, 403) or (response.status_code == 400 and 'api key' in response.text.lower()):
+                # A bad key fails the same way for every model, so stop here
+                print(f"Gemini key rejected: {_google_error(response)}")
+                raise ExtractionError(f'Google rejected the Gemini API key: {_google_error(response)} '
+                                      'Check GEMINI_API_KEY on Render.')
+            if response.status_code == 400 and config is json_mode:
+                print(f"Gemini {model} rejected JSON mode, retrying without it: {_google_error(response)}")
+                continue
+            if response.status_code >= 400:
+                problems.append(f'{model}: {response.status_code} {_google_error(response)}')
+                break
+            result, problem = _parse_json_reply(response.json())
+            if result is not None:
+                return result
+            problems.append(f'{model}: {problem}')
+            break
+    print("Gemini extraction failed: " + ' | '.join(problems))
+    reason = problems[0] if problems else 'unknown error'
+    raise ExtractionError(f"The AI couldn't read this page ({reason[:200]}). You can still fill in the details by hand.")
 
 
 def _as_list(value):
