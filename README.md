@@ -7,20 +7,22 @@ An AI-first web dashboard that aggregates tech opportunities open to Nigerians. 
 
 ## Key Features
 1.  **Glassmorphic Dark UI**: Premium, responsive dashboard with tailored HSL color codes, custom micro-animations, and a light mode toggle.
-2.  **Live Updates (Sync)**: Connects to popular platforms (Opportunities for Africans, Opportunity Desk) via standard WordPress RSS feeds with built-in fallback XML/regex parsing.
+2.  **Live Updates (Sync)**: Pulls from RSS feeds (Opportunities for Africans, Opportunity Desk, Scholars4Dev, Opportunities for Youth), hackathon platforms (Devpost online hackathons, HackerEarth, Zindi), and remote tech jobs open worldwide/Africa (Remotive). Each source syncs independently, so one failing doesn't stop the rest.
 3.  **Persistent Database**: Postgres (Neon) in production, a local SQLite file in development. Seeds a high-quality starting list on first run.
 4.  **Flexible Filter & Search**: Instant filtering by category (Scholarships, Internships, Competitions, Jobs) or custom keyword search.
 5.  **Bookmarking System**: Each visitor's bookmarks are saved privately in their own browser.
 6.  **LinkedIn Post Generator**: Generates engaging, formatted LinkedIn posts with emojis, hooks, and hashtags for any selected opportunity.
-7.  **Opportunity Details**: Eligibility, required documents, apply link, and a Verified badge for checked listings.
-8.  **HorizonScholar Import**: Pulls the latest results of the `seyi_glory/horizon-scholar-scraper` Apify actor. Trusted results go live; the rest wait for admin review.
-9.  **Admin Panel** (`/admin`): Paste a link and Gemini reads the page and drafts the listing for review. Approve, edit, unpublish, or delete listings.
+7.  **Deadline Tracking**: Listings show "N days left" in their final week and "Deadline passed" once it goes by. Three days after the deadline they are hidden from the site (admins still see them).
+8.  **Opportunity Details**: Eligibility, required documents, apply link, and a Verified badge for checked listings.
+9.  **HorizonScholar Import**: Pulls the latest results of the `seyi_glory/horizon-scholar-scraper` Apify actor. Trusted results go live; the rest wait for admin review.
+10. **Admin Panel** (`/admin`): Paste a link and Gemini reads the page and drafts the listing for review. Approve, edit, unpublish, or delete listings.
 
 ## Project Structure
 *   `app.py`: Flask backend, routing, API endpoints, and LinkedIn generation logic.
 *   `aggregator.py`: Predefined opportunity seeds, RSS XML downloading, and keyword classification.
 *   `extractor.py`: Reads a pasted link and extracts opportunity details with Gemini.
 *   `templates/admin.html`, `static/js/admin.js`: Admin panel.
+*   `deadlines.py`: Reads free-text deadlines and decides when a listing has expired.
 *   `db.py`: Database access. Uses Postgres when `DATABASE_URL` is set, otherwise the local SQLite file.
 *   `templates/dashboard.html`: The HTML template structured with Material Symbols and responsive container layouts.
 *   `static/css/styles.css`: CSS Variables, glassmorphic card designs, loading spinners, and toast styles.
@@ -68,5 +70,7 @@ Set the `DATABASE_URL` environment variable on Render to a Postgres connection s
 | `APIFY_ACTOR` | Optional | Actor to import from (default `seyi_glory~horizon-scholar-scraper`). |
 
 Notes:
-*   The app syncs the RSS feeds and Apify results automatically on startup, and whenever someone clicks Sync (at most every 10 minutes). Schedule the Apify actor itself in the Apify console.
+*   The app syncs every source automatically on startup, and in the background whenever someone clicks Sync (at most every 10 minutes). Schedule the Apify actor itself in the Apify console.
 *   The free plan sleeps after ~15 minutes without visitors, so the first visit afterwards takes up to a minute to load.
+
+Job listings from Remotive link back to Remotive, as its API terms require.

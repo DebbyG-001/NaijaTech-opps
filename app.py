@@ -52,8 +52,18 @@ def run_sync(force=False):
     finally:
         _sync_lock.release()
 
+def start_background_sync(force=False):
+    """Starts a sync without waiting for it (syncing every source can outlast a web request).
+    Returns 'started', 'busy' (a sync is running), or 'cooldown' (one ran recently)."""
+    if _sync_lock.locked():
+        return 'busy'
+    if not force and time.time() - _last_sync_time < SYNC_COOLDOWN_SECONDS:
+        return 'cooldown'
+    threading.Thread(target=run_sync, kwargs={'force': force}, daemon=True).start()
+    return 'started'
+
 # Pull fresh listings in the background on startup, so a fresh deploy isn't limited to the seed list
-threading.Thread(target=run_sync, daemon=True).start()
+start_background_sync()
 
 @app.route('/')
 def index():
@@ -91,15 +101,9 @@ def healthz():
 
 @app.route('/api/opportunities/refresh', methods=['POST'])
 def api_refresh():
-    """API endpoint to trigger fetching new opportunities."""
-    try:
-        new_count = run_sync()
-        if new_count is None:
-            return jsonify({"success": True, "new_count": 0, "skipped": True})
-        return jsonify({"success": True, "new_count": new_count})
-    except Exception as e:
-        app.logger.exception("Sync failed")
-        return jsonify({"error": "Sync failed. Please try again later."}), 500
+    """API endpoint to trigger fetching new opportunities in the background."""
+    result = start_background_sync()
+    return jsonify({"success": True, "started": result == 'started', "skipped": result != 'started'})
 
 @app.route('/api/linkedin/generate', methods=['POST'])
 def api_generate_linkedin():
@@ -271,7 +275,7 @@ def admin_list():
     status = request.args.get('status')
     if status not in (db.STATUS_PUBLISHED, db.STATUS_PENDING):
         status = None
-    return jsonify(aggregator.get_opportunities(status=status))
+    return jsonify(aggregator.get_opportunities(status=status, include_expired=True))
 
 @app.route('/admin/api/extract', methods=['POST'])
 @admin_required
@@ -333,16 +337,9 @@ def admin_delete(opp_id):
 @app.route('/admin/api/sync', methods=['POST'])
 @admin_required
 def admin_sync():
-    try:
-        new_count = run_sync(force=True)
-    except Exception:
-        app.logger.exception("Admin sync failed")
-        return jsonify({"error": "Sync failed. Check the server logs."}), 500
-    if new_count is None:
-        return jsonify({"success": True, "busy": True})
-    return jsonify({"success": True, "new_count": new_count,
-                    "apify_configured": bool(os.environ.get('APIFY_TOKEN')),
-                    "ai_configured": bool(os.environ.get('GEMINI_API_KEY'))})
+    result = start_background_sync(force=True)
+    return jsonify({"success": True, "busy": result == 'busy',
+                    "apify_configured": bool(os.environ.get('APIFY_TOKEN'))})
 
 if __name__ == '__main__':
     # Local development server; production runs under gunicorn (see render.yaml)

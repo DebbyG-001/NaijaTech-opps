@@ -845,3 +845,35 @@ body.light-mode .admin-status.warn { color: #b45309; }
 body.light-mode .admin-status.error,
 body.light-mode .admin-error { color: #dc2626; }
 body.light-mode .verified-badge { color: #047857; }
+
+/* Deadline badges */
+.deadline-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.15rem 0.55rem;
+    border-radius: 20px;
+}
+
+.deadline-badge .google-symbols {
+    font-size: 1rem;
+}
+
+.deadline-badge.expired {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.12);
+}
+
+.deadline-badge.soon {
+    color: #fbbf24;
+    background: rgba(245, 158, 11, 0.12);
+}
+
+.opportunity-card.is-expired {
+    opacity: 0.6;
+}
+
+body.light-mode .deadline-badge.expired { color: #b91c1c; }
+body.light-mode .deadline-badge.soon { color: #b45309; }

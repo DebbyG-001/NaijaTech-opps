@@ -7,6 +7,7 @@ import requests
 from bs4 import BeautifulSoup
 
 import db
+import deadlines
 
 # Predefined high-quality opportunities for Nigerians (reliable seeds)
 CURATED_OPPORTUNITIES = [
@@ -130,13 +131,14 @@ def init_db():
     else:
         print("Database already contains opportunities.")
 
-def get_opportunities(category_filter=None, status=db.STATUS_PUBLISHED):
+def get_opportunities(category_filter=None, status=db.STATUS_PUBLISHED, include_expired=False):
     """Retrieves opportunities from the database with optional filtering.
-    Pass status=None to include every status (admin views)."""
+    Pass status=None to include every status (admin views). Listings more than
+    deadlines.GRACE_DAYS past their deadline are left out unless include_expired=True."""
     sql = "SELECT * FROM opportunities"
     params = []
     conditions = []
-    
+
     if category_filter:
         conditions.append("category = ?")
         params.append(category_filter)
@@ -147,10 +149,18 @@ def get_opportunities(category_filter=None, status=db.STATUS_PUBLISHED):
 
     if conditions:
         sql += " WHERE " + " AND ".join(conditions)
-        
+
     sql += " ORDER BY created_at DESC, id DESC"
-    
-    return [db.decode_row(row) for row in db.query(sql, params)]
+
+    today = deadlines.today_in_nigeria()
+    results = []
+    for row in db.query(sql, params):
+        opp = db.decode_row(row)
+        opp.update(deadlines.deadline_status(opp.get('deadline'), today))
+        if opp['is_hidden'] and not include_expired:
+            continue
+        results.append(opp)
+    return results
 
 def clean_html(raw_html):
     """Removes HTML tags and cleans up strings."""
@@ -302,8 +312,14 @@ def parse_rss_feed(url, source_name):
                 })
         except Exception as fallback_err:
             print(f"Regex fallback failed for {url}: {fallback_err}")
-        
-    return opportunities
+
+    return [o for o in opportunities if not is_article_title(o['title'])]
+
+# Blog-style posts ("Top 10 Scholarships in ...", "How to ...") that aren't a single opportunity
+ARTICLE_TITLE = re.compile(r'^(top\s+\d+|\d+\+?\s+(best|top|countries|ways|tips|scholarships|universities)\b|how\s+to\b|why\s|what\s|list\s+of\b|tips\b)', re.IGNORECASE)
+
+def is_article_title(title):
+    return bool(ARTICLE_TITLE.match(title.strip()))
 
 APIFY_ACTOR = os.environ.get('APIFY_ACTOR', 'seyi_glory~horizon-scholar-scraper')
 APIFY_SOURCE_NAME = 'HorizonScholar'
@@ -361,25 +377,152 @@ def fetch_apify_opportunities():
         })
     return opportunities
 
-def fetch_and_update_opportunities():
-    """Fetches opportunities from RSS feeds and the Apify actor and inserts them into the DB."""
-    feeds = [
-        ("https://www.opportunitiesforafricans.com/feed/", "Opportunities for Africans"),
-        ("https://opportunitydesk.org/feed/", "Opportunity Desk")
-    ]
-    
-    new_count = 0
-    for feed_url, source_name in feeds:
-        print(f"Fetching updates from {source_name}...")
-        opps = parse_rss_feed(feed_url, source_name)
-        # Listings whose URL is already stored are skipped
-        new_count += db.insert_opportunities(opps)
+API_HEADERS = {'User-Agent': 'NaijaTechOpps/1.0 (+https://naijatech-opps.onrender.com)'}
 
-    apify_opps = fetch_apify_opportunities()
-    if apify_opps:
-        print(f"Importing {len(apify_opps)} results from Apify...")
-        new_count += db.insert_opportunities(apify_opps)
-                
+def _get_json(url, **kwargs):
+    response = requests.get(url, headers=API_HEADERS, timeout=20, **kwargs)
+    response.raise_for_status()
+    return response.json()
+
+def _short(text, limit=250):
+    text = clean_html(text or '')
+    return text if len(text) <= limit else text[:limit - 3] + "..."
+
+def fetch_devpost():
+    """Open online hackathons from Devpost."""
+    opportunities = []
+    for page in (1, 2, 3):
+        data = _get_json('https://devpost.com/api/hackathons', params={'status[]': 'open', 'page': page})
+        hackathons = data.get('hackathons') or []
+        for h in hackathons:
+            location = ((h.get('displayed_location') or {}).get('location') or '').lower()
+            if h.get('invite_only') or location != 'online' or not h.get('url'):
+                continue
+            end = deadlines.parse_deadline(h.get('submission_period_dates'))
+            themes = ', '.join(t.get('name') for t in (h.get('themes') or [])[:3] if t.get('name'))
+            prize = clean_html(h.get('prize_amount') or '')
+            summary = f"Online hackathon{' on ' + themes if themes else ''}."
+            # Skip "$0" (no cash prize)
+            if re.sub(r'\D', '', prize).strip('0'):
+                summary += f" Prizes: {prize}."
+            opportunities.append({
+                "title": clean_html(h.get('title') or ''),
+                "category": "Competition",
+                "organization": clean_html(h.get('organization_name') or '') or "Devpost",
+                "description": _short(summary),
+                "url": h['url'],
+                "deadline": deadlines.format_deadline(end) if end else "See Link",
+                "source": "Devpost",
+            })
+        if len(hackathons) < 9:
+            break
+    return opportunities
+
+def fetch_hackerearth():
+    """Ongoing and upcoming hackathons and challenges from HackerEarth."""
+    events = _get_json('https://www.hackerearth.com/chrome-extension/events/').get('response') or []
+    opportunities = []
+    for e in events:
+        if (e.get('status') or '').upper() not in ('ONGOING', 'UPCOMING') or not e.get('url'):
+            continue
+        end = deadlines.parse_deadline(e.get('end_utc_tz') or e.get('end_tz'))
+        opportunities.append({
+            "title": clean_html(e.get('title') or ''),
+            "category": "Competition",
+            "organization": "HackerEarth",
+            "description": _short(e.get('description')) or "Hackathon hosted on HackerEarth.",
+            "url": e['url'],
+            "deadline": deadlines.format_deadline(end) if end else "See Link",
+            "source": "HackerEarth",
+        })
+    return opportunities
+
+def fetch_zindi():
+    """Open public AI/data science competitions from Zindi (Africa-focused)."""
+    data = _get_json('https://api.zindi.africa/v1/competitions', params={'page': 0, 'per_page': 50}).get('data') or []
+    opportunities = []
+    for c in data:
+        if not c.get('open') or c.get('is_access_restricted') or c.get('secret_code_required') or not c.get('id'):
+            continue
+        end = deadlines.parse_deadline(c.get('end_time'))
+        org = c.get('organization')
+        org_name = org.get('name') if isinstance(org, dict) else (org if isinstance(org, str) else '')
+        reward = (c.get('reward') or '').strip()
+        summary = "AI and data science competition on Zindi, Africa's data science community."
+        if reward:
+            summary += f" Reward: {reward}."
+        if c.get('is_beginner_friendly'):
+            summary += " Beginner friendly."
+        opportunities.append({
+            "title": clean_html(c.get('title') or ''),
+            "category": "Competition",
+            "organization": clean_html(org_name or '') or "Zindi",
+            "description": _short(summary),
+            "url": f"https://zindi.africa/competitions/{c['id']}",
+            "deadline": deadlines.format_deadline(end) if end else "See Link",
+            "source": "Zindi",
+        })
+    return opportunities
+
+REMOTIVE_OPEN_LOCATIONS = ('worldwide', 'anywhere', 'africa', 'nigeria', 'emea')
+# Remotive's API ignores the category filter, so tech roles are picked by their category name
+REMOTIVE_TECH_CATEGORIES = {'software development', 'data', 'data analysis', 'devops / sysadmin',
+                            'information technology', 'qa', 'design'}
+
+def fetch_remotive():
+    """Remote tech jobs from Remotive that accept applicants worldwide or in Africa.
+    Remotive's terms ask that listings credit Remotive and link back to it."""
+    opportunities = []
+    for category in ('software-dev', 'data'):
+        jobs = _get_json('https://remotive.com/api/remote-jobs', params={'category': category, 'limit': 50}).get('jobs') or []
+        for j in jobs:
+            location = (j.get('candidate_required_location') or '').lower()
+            if not any(k in location for k in REMOTIVE_OPEN_LOCATIONS) or not j.get('url'):
+                continue
+            if (j.get('category') or '').lower() not in REMOTIVE_TECH_CATEGORIES:
+                continue
+            opportunities.append({
+                "title": clean_html(j.get('title') or ''),
+                "category": "Job",
+                "organization": clean_html(j.get('company_name') or '') or "Remote company",
+                "description": _short(f"Remote role ({j.get('candidate_required_location')}). " + (j.get('description') or '')),
+                "url": j['url'],
+                "deadline": "Open until filled",
+                "source": "Remotive",
+            })
+    return opportunities
+
+RSS_FEEDS = [
+    ("https://www.opportunitiesforafricans.com/feed/", "Opportunities for Africans"),
+    ("https://opportunitydesk.org/feed/", "Opportunity Desk"),
+    ("https://www.scholars4dev.com/feed/", "Scholars4Dev"),
+    ("https://opportunitiesforyouth.org/feed/", "Opportunities for Youth"),
+]
+
+def fetch_and_update_opportunities():
+    """Fetches opportunities from every source and inserts the new ones into the DB.
+    Each source is independent: one failing doesn't stop the others."""
+    sources = [(name, lambda u=url, n=name: parse_rss_feed(u, n)) for url, name in RSS_FEEDS]
+    sources += [
+        ("Devpost", fetch_devpost),
+        ("HackerEarth", fetch_hackerearth),
+        ("Zindi", fetch_zindi),
+        ("Remotive", fetch_remotive),
+        ("Apify", fetch_apify_opportunities),
+    ]
+
+    new_count = 0
+    for name, fetch in sources:
+        print(f"Fetching updates from {name}...")
+        try:
+            opps = [o for o in fetch() if o.get('title') and o.get('url')]
+            # Listings whose URL is already stored are skipped
+            added = db.insert_opportunities(opps)
+            new_count += added
+            print(f"  {name}: {len(opps)} found, {added} new")
+        except Exception as e:
+            print(f"  {name} failed: {e}")
+
     print(f"Fetch completed. Added {new_count} new opportunities.")
     return new_count
 

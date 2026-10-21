@@ -99,8 +99,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 showToast('Listings were synced recently. Check back in a few minutes!');
                 fetchOpportunities();
             } else if (data.success) {
-                showToast(`Successfully retrieved ${data.new_count} new opportunities!`);
-                fetchOpportunities();
+                showToast('Fetching the latest opportunities. New ones will appear in about a minute.');
+                // The sync runs in the background on the server; reload when it's likely done
+                setTimeout(fetchOpportunities, 30000);
+                setTimeout(fetchOpportunities, 75000);
             } else {
                 showToast(`Failed to sync: ${data.error}`, 'error');
             }
@@ -223,7 +225,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         filtered.forEach(opp => {
             const card = document.createElement('div');
-            card.className = 'opportunity-card';
+            card.className = opp.is_expired ? 'opportunity-card is-expired' : 'opportunity-card';
             
             const color = categoryColors[opp.category] || '#64748b';
             card.style.setProperty('--category-color', color);
@@ -238,6 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="card-tags">
                         <span class="category-tag">${escapeHtml(opp.category)}</span>
                         ${opp.is_verified ? '<span class="verified-badge" title="Apply link checked as genuine"><i class="google-symbols">verified</i> Verified</span>' : ''}
+                        ${deadlineBadge(opp)}
                     </div>
                     <button class="bookmark-btn ${isBookmarkedClass}" title="Bookmark this opportunity">
                         <i class="google-symbols">${bookmarkIcon}</i>
@@ -286,6 +289,19 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // "Deadline passed" for expired listings (the server hides them 3 days later),
+    // "Closes today" / "N days left" when a deadline is within a week
+    function deadlineBadge(opp) {
+        if (opp.is_expired) {
+            return '<span class="deadline-badge expired" title="This listing will be removed soon"><i class="google-symbols">event_busy</i> Deadline passed</span>';
+        }
+        if (opp.days_left !== null && opp.days_left !== undefined && opp.days_left <= 7) {
+            const text = opp.days_left === 0 ? 'Closes today' : `${opp.days_left} day${opp.days_left === 1 ? '' : 's'} left`;
+            return `<span class="deadline-badge soon"><i class="google-symbols">schedule</i> ${text}</span>`;
+        }
+        return '';
+    }
+
     // Opportunity details popup
     function openDetails(opp) {
         document.getElementById('details-title').textContent = opp.title;
@@ -297,7 +313,8 @@ document.addEventListener('DOMContentLoaded', () => {
         ];
         document.getElementById('details-meta').innerHTML =
             meta.map(([icon, text]) => `<span><i class="google-symbols" style="font-size: 1rem;">${icon}</i>${escapeHtml(text)}</span>`).join('') +
-            (opp.is_verified ? '<span class="verified-badge"><i class="google-symbols">verified</i> Verified</span>' : '');
+            (opp.is_verified ? '<span class="verified-badge"><i class="google-symbols">verified</i> Verified</span>' : '') +
+            deadlineBadge(opp);
 
         const section = (heading, items) => items && items.length ? `
             <div class="details-section">

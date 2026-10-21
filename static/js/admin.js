@@ -166,12 +166,14 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const data = await api('/admin/api/sync', { method: 'POST' });
             if (data.busy) {
-                showToast('A sync is already running. Try again in a minute.');
+                showToast('A sync is already running. New listings will appear shortly.');
             } else {
                 const apifyNote = data.apify_configured ? '' : ' (Apify not connected yet)';
-                showToast(`Sync done: ${data.new_count} new${apifyNote}.`);
+                showToast(`Sync started${apifyNote}. The list refreshes in about a minute.`);
             }
-            loadListings();
+            // The sync runs in the background on the server; reload when it's likely done
+            setTimeout(loadListings, 30000);
+            setTimeout(loadListings, 75000);
         } catch (err) {
             showToast(err.message, 'error');
         } finally {
@@ -214,6 +216,9 @@ document.addEventListener('DOMContentLoaded', () => {
         shown.forEach(opp => {
             const row = document.createElement('div');
             row.className = 'admin-item';
+            const expiry = opp.is_hidden
+                ? '<span class="deadline-badge expired">Expired, hidden from site</span>'
+                : opp.is_expired ? '<span class="deadline-badge expired">Deadline passed</span>' : '';
             const extra = [
                 opp.eligibility.length ? `${opp.eligibility.length} eligibility` : '',
                 opp.required_documents.length ? `${opp.required_documents.length} documents` : '',
@@ -223,6 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="admin-item-title">
                         ${opp.is_verified ? '<span class="verified-badge" title="Verified"><i class="google-symbols">verified</i></span>' : ''}
                         <a href="${escapeHtml(safeUrl(opp.url))}" target="_blank" rel="noopener noreferrer">${escapeHtml(opp.title)}</a>
+                        ${expiry}
                     </div>
                     <div class="admin-item-meta">
                         ${escapeHtml(opp.category)} · ${escapeHtml(opp.organization || 'Unknown org')} · ${escapeHtml(opp.source || '')}
