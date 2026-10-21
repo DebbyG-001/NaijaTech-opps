@@ -933,3 +933,17 @@ body.light-mode .btn-whatsapp {
         min-width: 0;
     }
 }
+
+.paste-text {
+    margin-top: 0.75rem;
+}
+
+.paste-text summary {
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.paste-text textarea {
+    width: 100%;
+}

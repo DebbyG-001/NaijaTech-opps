@@ -57,6 +57,12 @@
                 <button class="btn" id="manual-btn">Fill in by hand</button>
             </div>
             <p class="admin-status" id="extract-status"></p>
+            <details class="paste-text" id="paste-section">
+                <summary>Page needs a sign-in (Google Forms, LinkedIn)? Paste its text instead</summary>
+                <p class="admin-hint" style="margin-top: 0.5rem;">Open the link in your browser, select everything on the page (Ctrl+A), copy it (Ctrl+C), and paste it here. Keep the link in the box above so it's saved as the apply link.</p>
+                <textarea class="search-input admin-input" id="paste-text" rows="7" placeholder="Paste the page text here..."></textarea>
+                <button class="btn btn-primary" id="paste-btn" style="margin-top: 0.75rem;"><i class="google-symbols">auto_awesome</i> Read pasted text</button>
+            </details>
 
             <form id="opp-form" class="admin-form" hidden>
                 <input type="hidden" id="f-id">

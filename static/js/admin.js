@@ -28,24 +28,42 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         let data = {};
         try { data = await res.json(); } catch (e) { /* non-JSON error page */ }
-        if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+        if (!res.ok) {
+            const error = new Error(data.error || `Request failed (${res.status})`);
+            error.code = data.code;
+            throw error;
+        }
         return data;
     }
 
     // ---- Add from a link ----
-    $('extract-btn').addEventListener('click', async () => {
+    $('extract-btn').addEventListener('click', () => {
         const url = $('extract-url').value.trim();
         if (!url) {
             $('extract-url').focus();
             return;
         }
-        const btn = $('extract-btn');
+        runExtract({ url }, $('extract-btn'), 'Read link', 'Reading the page. This can take up to a minute...');
+    });
+
+    $('paste-btn').addEventListener('click', () => {
+        const text = $('paste-text').value.trim();
+        if (!text) {
+            $('paste-text').focus();
+            return;
+        }
+        runExtract({ url: $('extract-url').value.trim(), text }, $('paste-btn'), 'Read pasted text',
+            'Reading the pasted text. This can take up to a minute...');
+    });
+
+    async function runExtract(body, btn, label, waitMessage) {
         btn.disabled = true;
         btn.innerHTML = '<div class="loading-spinner" style="width: 14px; height: 14px;"></div> Reading...';
-        setStatus('Reading the page. This can take up to a minute...');
+        setStatus(waitMessage);
         try {
-            const { draft } = await api('/admin/api/extract', { method: 'POST', body: { url } });
+            const { draft } = await api('/admin/api/extract', { method: 'POST', body });
             fillForm(draft);
+            if (body.text) $('paste-section').open = false;
             if (draft.existing) {
                 setStatus(`This link is already on the site (${draft.existing.status}). Find it in the list below to edit it.`, 'warn');
             } else if (!draft.used_ai) {
@@ -56,12 +74,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 setStatus('Done. Check the details below, then publish.');
             }
         } catch (err) {
-            setStatus(err.message, 'error');
+            setStatus(err.message, err.code === 'login_required' ? 'warn' : 'error');
+            if (err.code === 'login_required') {
+                // Point the admin straight at the paste box
+                $('paste-section').open = true;
+                $('paste-text').focus();
+            }
         } finally {
             btn.disabled = false;
-            btn.innerHTML = '<i class="google-symbols">auto_awesome</i> Read link';
+            btn.innerHTML = `<i class="google-symbols">auto_awesome</i> ${label}`;
         }
-    });
+    }
 
     $('extract-url').addEventListener('keydown', e => {
         if (e.key === 'Enter') {
@@ -108,6 +131,7 @@ document.addEventListener('DOMContentLoaded', () => {
         $('f-id').value = '';
         form.hidden = true;
         setStatus('');
+        $('paste-text').value = '';
     }
 
     async function saveForm(status) {

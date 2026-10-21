@@ -289,11 +289,17 @@ def admin_list():
 @app.route('/admin/api/extract', methods=['POST'])
 @admin_required
 def admin_extract():
-    url = (request.get_json() or {}).get('url', '')
+    data = request.get_json() or {}
+    url = str(data.get('url') or '')
+    pasted_text = str(data.get('text') or '')
     try:
-        draft = extractor.extract_opportunity(url)
+        if pasted_text.strip():
+            # Text the admin copied from a page that needs a sign-in
+            draft = extractor.extract_from_text(url, pasted_text)
+        else:
+            draft = extractor.extract_opportunity(url)
     except extractor.ExtractionError as e:
-        return jsonify({"error": str(e)}), 422
+        return jsonify({"error": str(e), "code": e.code}), 422
     except Exception:
         app.logger.exception("Extraction failed")
         return jsonify({"error": "Something went wrong reading that page. You can fill in the details by hand."}), 500

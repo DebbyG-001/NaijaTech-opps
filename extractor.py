@@ -29,7 +29,18 @@ USER_AGENT = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
 
 
 class ExtractionError(Exception):
-    """A problem worth showing to the admin as-is."""
+    """A problem worth showing to the admin as-is. code='login_required' means the page
+    can't be read without signing in, so the admin should paste its text instead."""
+    def __init__(self, message, code=None):
+        super().__init__(message)
+        self.code = code
+
+
+LOGIN_REQUIRED_MESSAGE = ("This page needs a sign-in (common for Google Forms and LinkedIn), so it can't be read "
+                          "automatically. Open it in your browser, copy all the text on the page, and paste it below.")
+
+# Hosts that only ever show a sign-in page to automated visitors
+LOGIN_HOSTS = ('accounts.google.com', 'www.linkedin.com/login', 'www.linkedin.com/authwall', 'login.microsoftonline.com')
 
 
 def normalize_url(url):
@@ -74,7 +85,12 @@ def fetch_page(url):
             raise ExtractionError("Couldn't reach that page. It may be down or blocking automated access.")
         if response.is_redirect:
             current = urljoin(current, response.headers.get('Location', ''))
+            if any(host in current for host in LOGIN_HOSTS):
+                raise ExtractionError(LOGIN_REQUIRED_MESSAGE, code='login_required')
             continue
+        if response.status_code in (401, 403, 999):
+            # 999 is LinkedIn's "no bots" status
+            raise ExtractionError(LOGIN_REQUIRED_MESSAGE, code='login_required')
         if response.status_code in (404, 410):
             raise ExtractionError("That link doesn't exist (page not found). Check it for typos: "
                                   "short links like bit.ly are case-sensitive.")
@@ -103,7 +119,8 @@ def page_to_text(html_text):
         'description': _meta(soup, 'og:description', 'description', 'twitter:description'),
         'site_name': _meta(soup, 'og:site_name'),
     }
-    for tag in soup(['script', 'style', 'noscript', 'svg', 'iframe', 'form']):
+    # Forms are kept: Google Forms put the whole opportunity description inside one
+    for tag in soup(['script', 'style', 'noscript', 'svg', 'iframe']):
         tag.decompose()
     # Keep link targets visible so the model can find the real application link
     for a in soup.find_all('a', href=True):
@@ -181,13 +198,9 @@ def _as_list(value):
     return []
 
 
-def extract_opportunity(url):
-    """Returns a draft opportunity dict for the admin to review. Raises ExtractionError."""
-    # Short links (bit.ly etc.) are followed, so the saved link is the real destination
-    final_url, html_text = fetch_page(normalize_url(url))
-    meta, text = page_to_text(html_text)
-
-    draft = {
+def _blank_draft(url, meta=None):
+    meta = meta or {'title': '', 'description': '', 'site_name': ''}
+    return {
         'title': meta['title'],
         'category': 'Competition',
         'organization': meta['site_name'],
@@ -196,16 +209,15 @@ def extract_opportunity(url):
         'eligibility': [],
         'required_documents': [],
         'apply_link': '',
-        'url': final_url,
+        'url': url,
         'open_to_nigerians': None,
         'used_ai': False,
     }
 
-    api_key = os.environ.get('GEMINI_API_KEY', '').strip()
-    if not api_key:
-        return draft
 
-    result = _call_gemini(PROMPT.format(url=final_url, title=meta['title'],
+def _fill_with_ai(draft, text, api_key, meta=None):
+    meta = meta or {'title': '', 'description': ''}
+    result = _call_gemini(PROMPT.format(url=draft['url'], title=meta['title'],
                                         description=meta['description'], text=text), api_key)
     category = result.get('category')
     draft.update({
@@ -222,4 +234,33 @@ def extract_opportunity(url):
     })
     if not draft['apply_link'].startswith(('http://', 'https://')):
         draft['apply_link'] = ''
+    return draft
+
+
+def extract_opportunity(url):
+    """Returns a draft opportunity dict for the admin to review. Raises ExtractionError."""
+    # Short links (bit.ly etc.) are followed, so the saved link is the real destination
+    final_url, html_text = fetch_page(normalize_url(url))
+    meta, text = page_to_text(html_text)
+    draft = _blank_draft(final_url, meta)
+
+    api_key = os.environ.get('GEMINI_API_KEY', '').strip()
+    if not api_key:
+        return draft
+    return _fill_with_ai(draft, text, api_key, meta)
+
+
+def extract_from_text(url, text):
+    """Like extract_opportunity, but reads text the admin copied from the page themselves
+    (for pages behind a sign-in). The link is used as the apply link if none is found."""
+    text = re.sub(r'\n{2,}', '\n', (text or '').strip())[:MAX_PROMPT_CHARS]
+    if len(text) < 40:
+        raise ExtractionError('Paste more of the page text: the title, description, and requirements.')
+    api_key = os.environ.get('GEMINI_API_KEY', '').strip()
+    if not api_key:
+        raise ExtractionError('Reading pasted text needs the AI (GEMINI_API_KEY). You can fill in the details by hand.')
+    url = normalize_url(url)
+    draft = _fill_with_ai(_blank_draft(url), text, api_key)
+    if not draft['apply_link'] and url.startswith(('http://', 'https://')):
+        draft['apply_link'] = url
     return draft
