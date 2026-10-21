@@ -107,8 +107,18 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         list.innerHTML = '';
-        // Soonest deadlines first, so time-sensitive posts go out before they expire
-        const ordered = [...queue].sort((a, b) => sortKey(a) - sortKey(b));
+        const query = document.getElementById('wa-search').value.trim().toLowerCase();
+        let ordered = sortedQueue();
+        if (query) {
+            ordered = ordered.filter(o =>
+                o.title.toLowerCase().includes(query) ||
+                (o.organization || '').toLowerCase().includes(query) ||
+                (o.source || '').toLowerCase().includes(query));
+            if (!ordered.length) {
+                list.innerHTML = '<p class="admin-hint" style="padding: 1rem 0;">Nothing in the queue matches.</p>';
+                return;
+            }
+        }
         ordered.slice(0, shownCount).forEach(opp => {
             const message = buildMessage(opp);
             const row = document.createElement('div');
@@ -187,6 +197,25 @@ document.addEventListener('DOMContentLoaded', () => {
         return opp.days_left === null || opp.days_left === undefined ? 9999 : opp.days_left;
     }
 
+    // "Newest first" (default) puts just-added listings on top; "Closing soonest" puts
+    // time-sensitive ones first. Listing ids grow over time, so a higher id is newer.
+    function sortedQueue() {
+        const byNewest = (a, b) => b.id - a.id;
+        if (document.getElementById('wa-sort').value === 'deadline') {
+            return [...queue].sort((a, b) => sortKey(a) - sortKey(b) || byNewest(a, b));
+        }
+        return [...queue].sort(byNewest);
+    }
+
+    document.getElementById('wa-search').addEventListener('input', () => {
+        shownCount = PAGE_SIZE;
+        renderQueue();
+    });
+    document.getElementById('wa-sort').addEventListener('change', () => {
+        shownCount = PAGE_SIZE;
+        renderQueue();
+    });
+
     // ---- Toolbar ----
     document.getElementById('wa-digest-btn').addEventListener('click', async () => {
         if (!queue.length) {
@@ -194,7 +223,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         const size = parseInt(document.getElementById('wa-digest-size').value, 10);
-        const items = [...queue].sort((a, b) => sortKey(a) - sortKey(b)).slice(0, size);
+        const items = sortedQueue().slice(0, size);
         if (!(await copy(buildDigest(items)))) return;
         if (confirm(`Roundup of ${items.length} copied. Paste it into the channel.\n\nMark these ${items.length} as posted now?`)) {
             mark(items.map(o => o.id), 'posted', `${items.length} marked as posted.`);

@@ -133,6 +133,13 @@
             </div>
             <p class="admin-hint">New opportunities wait here with a ready-to-post message. Copy it, paste it into the channel, then mark it as posted.
                 {% if not whatsapp_channel_url %}Add a <code>WHATSAPP_CHANNEL_URL</code> setting on Render to show a "Join our WhatsApp channel" button on the site.{% endif %}</p>
+            <div class="admin-row" style="margin-bottom: 0.5rem;">
+                <input class="search-input admin-input admin-search" id="wa-search" placeholder="Find in queue...">
+                <select class="search-input admin-input admin-small" id="wa-sort" aria-label="Sort queue">
+                    <option value="newest" selected>Newest first</option>
+                    <option value="deadline">Closing soonest</option>
+                </select>
+            </div>
             <div id="wa-list" class="admin-list"></div>
             <details class="wa-recent">
                 <summary>Recently posted or skipped</summary>
