@@ -8,6 +8,7 @@ from bs4 import BeautifulSoup
 
 import db
 import deadlines
+import regions
 
 # Predefined high-quality opportunities for Nigerians (reliable seeds)
 CURATED_OPPORTUNITIES = [
@@ -156,10 +157,21 @@ def get_opportunities(category_filter=None, status=db.STATUS_PUBLISHED, include_
     results = []
     for row in db.query(sql, params):
         opp = db.decode_row(row)
-        opp.update(deadlines.deadline_status(opp.get('deadline'), today))
+        deadline_text = opp.get('deadline')
+        if not deadlines.parse_deadline(deadline_text):
+            # Feeds often bury the deadline in the summary ("Application Deadline: July 4, 2026 ...")
+            found = deadlines.deadline_in_text(opp.get('description'))
+            if found:
+                deadline_text = found
+                opp['deadline'] = deadlines.format_deadline(deadlines.parse_deadline(found))
+        opp.update(deadlines.deadline_status(deadline_text, today))
         if opp['is_hidden'] and not include_expired:
             continue
+        opp['region'] = regions.classify(opp)
         results.append(opp)
+    # Nigerian opportunities first, then Africa-wide, then global; newest first within each
+    # (the sort is stable, so the database's newest-first order is kept inside each group)
+    results.sort(key=lambda o: regions.ORDER[o['region']])
     return results
 
 def clean_html(raw_html):

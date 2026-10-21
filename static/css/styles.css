@@ -947,3 +947,26 @@ body.light-mode .btn-whatsapp {
 .paste-text textarea {
     width: 100%;
 }
+
+/* Nigeria badge (Nigerian opportunities are listed first) */
+.nigeria-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #34d399;
+    background: rgba(0, 135, 81, 0.15);
+    border: 1px solid rgba(0, 135, 81, 0.35);
+    padding: 0.15rem 0.55rem;
+    border-radius: 20px;
+}
+
+.nigeria-badge .google-symbols {
+    font-size: 0.95rem;
+}
+
+body.light-mode .nigeria-badge {
+    color: #006b3f;
+    background: rgba(0, 135, 81, 0.1);
+}

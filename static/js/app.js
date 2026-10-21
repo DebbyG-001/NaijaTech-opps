@@ -206,6 +206,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="card-header">
                     <div class="card-tags">
                         <span class="category-tag">${escapeHtml(opp.category)}</span>
+                        ${opp.region === 'nigeria' ? '<span class="nigeria-badge" title="For Nigerians or based in Nigeria"><i class="google-symbols">location_on</i> Nigeria</span>' : ''}
                         ${opp.is_verified ? '<span class="verified-badge" title="Apply link checked as genuine"><i class="google-symbols">verified</i> Verified</span>' : ''}
                         ${deadlineBadge(opp)}
                     </div>
@@ -271,6 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ];
         document.getElementById('details-meta').innerHTML =
             meta.map(([icon, text]) => `<span><i class="google-symbols" style="font-size: 1rem;">${icon}</i>${escapeHtml(text)}</span>`).join('') +
+            (opp.region === 'nigeria' ? '<span class="nigeria-badge"><i class="google-symbols">location_on</i> Nigeria</span>' : '') +
             (opp.is_verified ? '<span class="verified-badge"><i class="google-symbols">verified</i> Verified</span>' : '') +
             deadlineBadge(opp);
 

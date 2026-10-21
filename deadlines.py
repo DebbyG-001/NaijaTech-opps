@@ -60,6 +60,21 @@ def parse_deadline(text):
     return max(dates) if dates else None
 
 
+_DEADLINE_LABEL = re.compile(r'(?:application\s+)?(?:deadline|closing\s+date|apply\s+(?:by|before))\s*[:\-–]?\s*', re.IGNORECASE)
+
+
+def deadline_in_text(text):
+    """Finds a date right after a 'Deadline:' style label in longer text, as an ISO date string."""
+    if not text:
+        return None
+    for m in _DEADLINE_LABEL.finditer(str(text)):
+        # Only look a short way past the label, so later dates in the text aren't mistaken for it
+        found = parse_deadline(text[m.end():m.end() + 40])
+        if found:
+            return found.isoformat()
+    return None
+
+
 def today_in_nigeria():
     return datetime.now(LAGOS_TZ).date()
 
