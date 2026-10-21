@@ -4,6 +4,7 @@ Uses Postgres when the DATABASE_URL environment variable is set (production on R
 backed by Neon), and falls back to a local SQLite file otherwise (local development).
 Queries are written with SQLite-style `?` placeholders and translated for Postgres.
 """
+import json
 import os
 import sqlite3
 
@@ -16,6 +17,19 @@ SQLITE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'opportun
 if USE_POSTGRES:
     import psycopg
     from psycopg.rows import dict_row
+
+# Columns added after the first release; created on startup if missing.
+# eligibility and required_documents hold JSON-encoded lists of strings.
+EXTRA_COLUMNS = {
+    'eligibility': 'TEXT',
+    'required_documents': 'TEXT',
+    'apply_link': 'TEXT',
+    'is_verified': 'INTEGER DEFAULT 0',
+    'status': "TEXT DEFAULT 'published'",
+}
+
+STATUS_PUBLISHED = 'published'
+STATUS_PENDING = 'pending'
 
 
 def connect():
@@ -57,20 +71,42 @@ def execute(sql, params=()):
         conn.close()
 
 
+def _as_json_list(value):
+    if not value:
+        return None
+    if isinstance(value, str):
+        value = [value]
+    items = [str(v).strip() for v in value if str(v).strip()]
+    return json.dumps(items) if items else None
+
+
+def _row_values(opp):
+    return (
+        opp['title'], opp['category'], opp.get('organization'), opp.get('description'),
+        opp['url'], opp.get('deadline'), opp.get('source'),
+        _as_json_list(opp.get('eligibility')), _as_json_list(opp.get('required_documents')),
+        opp.get('apply_link'), 1 if opp.get('is_verified') else 0,
+        opp.get('status') or STATUS_PUBLISHED,
+    )
+
+
+_INSERT_SQL = '''
+    INSERT INTO opportunities (title, category, organization, description, url, deadline, source,
+                               eligibility, required_documents, apply_link, is_verified, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT (url) DO NOTHING
+'''
+
+
 def insert_opportunities(opps):
     """Inserts opportunities, skipping any whose URL is already stored. Returns how many were new."""
-    sql = _sql('''
-        INSERT INTO opportunities (title, category, organization, description, url, deadline, source)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT (url) DO NOTHING
-    ''')
+    sql = _sql(_INSERT_SQL)
     new_count = 0
     conn = connect()
     try:
         cur = conn.cursor()
         for opp in opps:
-            cur.execute(sql, (opp['title'], opp['category'], opp['organization'],
-                              opp['description'], opp['url'], opp['deadline'], opp['source']))
+            cur.execute(sql, _row_values(opp))
             new_count += max(cur.rowcount, 0)
         conn.commit()
     finally:
@@ -78,8 +114,41 @@ def insert_opportunities(opps):
     return new_count
 
 
+def update_opportunity(opp_id, opp):
+    """Overwrites the editable fields of one opportunity. Returns True if it existed."""
+    values = _row_values(opp)
+    return execute('''
+        UPDATE opportunities
+        SET title = ?, category = ?, organization = ?, description = ?, url = ?, deadline = ?,
+            source = ?, eligibility = ?, required_documents = ?, apply_link = ?, is_verified = ?,
+            status = ?
+        WHERE id = ?
+    ''', values + (opp_id,)) > 0
+
+
+def decode_row(row):
+    """Turns a database row into the shape the API returns (JSON lists decoded, flags as bools)."""
+    out = dict(row)
+    for key in ('eligibility', 'required_documents'):
+        try:
+            out[key] = json.loads(out.get(key) or '[]')
+        except (TypeError, ValueError):
+            out[key] = []
+    out['is_verified'] = bool(out.get('is_verified'))
+    return out
+
+
+def _existing_columns():
+    if USE_POSTGRES:
+        rows = query("SELECT column_name AS name FROM information_schema.columns "
+                     "WHERE table_name = 'opportunities'")
+    else:
+        rows = query("PRAGMA table_info(opportunities)")
+    return {r['name'] for r in rows}
+
+
 def init_schema():
-    """Creates the tables if they don't exist yet."""
+    """Creates the tables if they don't exist yet and adds any newer columns."""
     if USE_POSTGRES:
         id_column = 'id SERIAL PRIMARY KEY'
     else:
@@ -97,3 +166,7 @@ def init_schema():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    existing = _existing_columns()
+    for name, definition in EXTRA_COLUMNS.items():
+        if name not in existing:
+            execute(f'ALTER TABLE opportunities ADD COLUMN {name} {definition}')

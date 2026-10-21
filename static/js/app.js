@@ -22,6 +22,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const postArea = document.getElementById('post-area');
     const copyPostBtn = document.getElementById('copy-post-btn');
     
+    // Details modal
+    const detailsModal = document.getElementById('details-modal');
+
     // Toast container
     const toastContainer = document.getElementById('toast-container');
 
@@ -125,9 +128,23 @@ document.addEventListener('DOMContentLoaded', () => {
         linkedinModal.classList.remove('active');
     });
 
+    document.getElementById('close-details').addEventListener('click', () => {
+        detailsModal.classList.remove('active');
+    });
+
     window.addEventListener('click', (e) => {
         if (e.target === linkedinModal) {
             linkedinModal.classList.remove('active');
+        }
+        if (e.target === detailsModal) {
+            detailsModal.classList.remove('active');
+        }
+    });
+
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            linkedinModal.classList.remove('active');
+            detailsModal.classList.remove('active');
         }
     });
 
@@ -218,7 +235,10 @@ document.addEventListener('DOMContentLoaded', () => {
             // Listings come from third-party feeds, so every value is escaped before rendering
             card.innerHTML = `
                 <div class="card-header">
-                    <span class="category-tag">${escapeHtml(opp.category)}</span>
+                    <div class="card-tags">
+                        <span class="category-tag">${escapeHtml(opp.category)}</span>
+                        ${opp.is_verified ? '<span class="verified-badge" title="Apply link checked as genuine"><i class="google-symbols">verified</i> Verified</span>' : ''}
+                    </div>
                     <button class="bookmark-btn ${isBookmarkedClass}" title="Bookmark this opportunity">
                         <i class="google-symbols">${bookmarkIcon}</i>
                     </button>
@@ -240,9 +260,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>
                 <div class="card-actions">
-                    <a href="${escapeHtml(safeUrl(opp.url))}" target="_blank" rel="noopener noreferrer" class="btn" style="flex: 1.2;">
-                        <i class="google-symbols" style="font-size: 1rem;">open_in_new</i> View Details
-                    </a>
+                    <button class="btn details-btn" style="flex: 1.2;">
+                        <i class="google-symbols" style="font-size: 1rem;">info</i> View Details
+                    </button>
                     <button class="btn btn-primary linkedin-gen-btn" data-id="${opp.id}">
                         <i class="google-symbols" style="font-size: 1.1rem;">share</i> LinkedIn Post
                     </button>
@@ -254,6 +274,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 toggleBookmark(opp.url, e.currentTarget);
             });
             
+            card.querySelector('.details-btn').addEventListener('click', () => openDetails(opp));
+
             card.querySelector('.linkedin-gen-btn').addEventListener('click', (e) => {
                 const btn = e.currentTarget;
                 const oppId = btn.dataset.id;
@@ -262,6 +284,46 @@ document.addEventListener('DOMContentLoaded', () => {
 
             grid.appendChild(card);
         });
+    }
+
+    // Opportunity details popup
+    function openDetails(opp) {
+        document.getElementById('details-title').textContent = opp.title;
+
+        const meta = [
+            ['category', opp.category],
+            ['corporate_fare', opp.organization || 'Global Sponsor'],
+            ['event', `Deadline: ${opp.deadline || 'Rolling'}`],
+        ];
+        document.getElementById('details-meta').innerHTML =
+            meta.map(([icon, text]) => `<span><i class="google-symbols" style="font-size: 1rem;">${icon}</i>${escapeHtml(text)}</span>`).join('') +
+            (opp.is_verified ? '<span class="verified-badge"><i class="google-symbols">verified</i> Verified</span>' : '');
+
+        const section = (heading, items) => items && items.length ? `
+            <div class="details-section">
+                <h4>${heading}</h4>
+                <ul>${items.map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul>
+            </div>` : '';
+        const hasDetails = (opp.eligibility || []).length || (opp.required_documents || []).length;
+
+        document.getElementById('details-body').innerHTML = `
+            <div class="details-section">
+                <h4>About</h4>
+                <p>${escapeHtml(opp.description || 'No summary available.')}</p>
+            </div>
+            ${section('Who can apply', opp.eligibility)}
+            ${section('Required documents', opp.required_documents)}
+            ${hasDetails ? '' : '<p class="details-section" style="color: var(--text-muted); font-size: 0.85rem;">See the full listing for eligibility and requirements.</p>'}
+        `;
+
+        const applyLink = document.getElementById('details-apply-link');
+        const sourceLink = document.getElementById('details-source-link');
+        applyLink.href = safeUrl(opp.apply_link || opp.url);
+        sourceLink.href = safeUrl(opp.url);
+        // Only show a separate "Full listing" button when it differs from the apply link
+        sourceLink.style.display = opp.apply_link && opp.apply_link !== opp.url ? '' : 'none';
+
+        detailsModal.classList.add('active');
     }
 
     // Toggle Bookmark (stored in this browser)

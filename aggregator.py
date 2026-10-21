@@ -1,3 +1,4 @@
+import os
 import re
 import xml.etree.ElementTree as ET
 from datetime import datetime
@@ -129,18 +130,27 @@ def init_db():
     else:
         print("Database already contains opportunities.")
 
-def get_opportunities(category_filter=None):
-    """Retrieves opportunities from the database with optional filtering."""
+def get_opportunities(category_filter=None, status=db.STATUS_PUBLISHED):
+    """Retrieves opportunities from the database with optional filtering.
+    Pass status=None to include every status (admin views)."""
     sql = "SELECT * FROM opportunities"
     params = []
+    conditions = []
     
     if category_filter:
-        sql += " WHERE category = ?"
+        conditions.append("category = ?")
         params.append(category_filter)
+
+    if status:
+        conditions.append("status = ?")
+        params.append(status)
+
+    if conditions:
+        sql += " WHERE " + " AND ".join(conditions)
         
     sql += " ORDER BY created_at DESC, id DESC"
     
-    return db.query(sql, params)
+    return [db.decode_row(row) for row in db.query(sql, params)]
 
 def clean_html(raw_html):
     """Removes HTML tags and cleans up strings."""
@@ -295,8 +305,64 @@ def parse_rss_feed(url, source_name):
         
     return opportunities
 
+APIFY_ACTOR = os.environ.get('APIFY_ACTOR', 'seyi_glory~horizon-scholar-scraper')
+APIFY_SOURCE_NAME = 'HorizonScholar'
+
+def fetch_apify_opportunities():
+    """Reads the results of the latest successful run of the HorizonScholar Apify actor.
+    The actor itself is scheduled on Apify; this only imports what it found.
+    Returns [] when APIFY_TOKEN isn't configured or the request fails."""
+    token = os.environ.get('APIFY_TOKEN', '').strip()
+    if not token:
+        return []
+    url = f"https://api.apify.com/v2/acts/{APIFY_ACTOR}/runs/last/dataset/items"
+    try:
+        response = requests.get(
+            url,
+            params={'status': 'SUCCEEDED', 'clean': 'true', 'format': 'json'},
+            headers={'Authorization': f'Bearer {token}'},
+            timeout=30,
+        )
+        response.raise_for_status()
+        items = response.json()
+    except Exception as e:
+        print(f"Apify import failed: {e}")
+        return []
+
+    opportunities = []
+    for item in items if isinstance(items, list) else []:
+        title = clean_html(item.get('title') or '')
+        page_url = (item.get('sourceUrl') or item.get('applyLink') or '').strip()
+        if not title or not page_url.startswith(('http://', 'https://')):
+            continue
+        eligibility = [clean_html(e) for e in (item.get('eligibility') or []) if e]
+        documents = [clean_html(d) for d in (item.get('requiredDocuments') or []) if d]
+        is_trusted = bool(item.get('isTrusted'))
+        lowered = title.lower()
+        category = 'Competition' if any(k in lowered for k in ['competition', 'contest', 'essay', 'challenge']) else 'Scholarship'
+        provider = clean_html(item.get('provider') or '') or extract_organization(title)
+        description = ' '.join(eligibility[:2]) or f"{category} opportunity from {provider}."
+        if len(description) > 250:
+            description = description[:247] + "..."
+        opportunities.append({
+            "title": title,
+            "category": category,
+            "organization": provider,
+            "description": description,
+            "url": page_url,
+            "deadline": clean_html(item.get('deadline') or '') or "See Link",
+            "source": APIFY_SOURCE_NAME,
+            "eligibility": eligibility,
+            "required_documents": documents,
+            "apply_link": (item.get('applyLink') or '').strip() or None,
+            "is_verified": is_trusted,
+            # Verified listings go live straight away; the rest wait for admin review
+            "status": db.STATUS_PUBLISHED if is_trusted else db.STATUS_PENDING,
+        })
+    return opportunities
+
 def fetch_and_update_opportunities():
-    """Fetches opportunities from RSS feeds and inserts them into the DB."""
+    """Fetches opportunities from RSS feeds and the Apify actor and inserts them into the DB."""
     feeds = [
         ("https://www.opportunitiesforafricans.com/feed/", "Opportunities for Africans"),
         ("https://opportunitydesk.org/feed/", "Opportunity Desk")
@@ -308,6 +374,11 @@ def fetch_and_update_opportunities():
         opps = parse_rss_feed(feed_url, source_name)
         # Listings whose URL is already stored are skipped
         new_count += db.insert_opportunities(opps)
+
+    apify_opps = fetch_apify_opportunities()
+    if apify_opps:
+        print(f"Importing {len(apify_opps)} results from Apify...")
+        new_count += db.insert_opportunities(apify_opps)
                 
     print(f"Fetch completed. Added {new_count} new opportunities.")
     return new_count

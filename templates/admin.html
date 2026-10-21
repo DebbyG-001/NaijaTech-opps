@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Admin - NaijaTech Opps</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Symbols:opsz,wght,FILL,GRAD@20..48,300..500,0..1,-50..200" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <div class="app-container admin-container">
+        <header>
+            <div class="logo-section">
+                <h1>
+                    <i class="google-symbols" style="font-size: 2.4rem; background: linear-gradient(135deg, #a78bfa 0%, #06b6d4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">admin_panel_settings</i>
+                    Admin
+                </h1>
+                <p>Add, review, and publish opportunities on NaijaTech Opps</p>
+            </div>
+            <div class="actions-section">
+                <a class="btn" href="{{ url_for('index') }}"><i class="google-symbols">open_in_new</i> View site</a>
+                {% if logged_in %}
+                <form method="post" action="{{ url_for('admin_logout') }}">
+                    <button class="btn" type="submit"><i class="google-symbols">logout</i> Log out</button>
+                </form>
+                {% endif %}
+            </div>
+        </header>
+
+        {% if not configured %}
+        <section class="admin-card">
+            <h3>Admin panel not set up yet</h3>
+            <p class="admin-hint">Add an <code>ADMIN_PASSWORD</code> environment variable on Render, then redeploy.</p>
+        </section>
+
+        {% elif not logged_in %}
+        <section class="admin-card admin-login">
+            <h3>Log in</h3>
+            {% if error == 'wrong' %}<p class="admin-error">Wrong password. Try again.</p>{% endif %}
+            {% if error == 'locked' %}<p class="admin-error">Too many attempts. Try again in 15 minutes.</p>{% endif %}
+            <form method="post" action="{{ url_for('admin_login') }}">
+                <label class="admin-label" for="password">Password</label>
+                <input class="search-input admin-input" type="password" id="password" name="password" autocomplete="current-password" required autofocus>
+                <button class="btn btn-primary" type="submit" style="margin-top: 1rem; width: 100%;">Log in</button>
+            </form>
+        </section>
+
+        {% else %}
+        <!-- Add from a link -->
+        <section class="admin-card">
+            <h3><i class="google-symbols">add_link</i> Add an opportunity from a link</h3>
+            <p class="admin-hint">Paste a link to a hackathon, scholarship, internship, or job. The details are filled in for you to check before publishing.</p>
+            <div class="admin-row">
+                <input class="search-input admin-input" type="url" id="extract-url" placeholder="https://example.com/some-hackathon">
+                <button class="btn btn-primary" id="extract-btn"><i class="google-symbols">auto_awesome</i> Read link</button>
+                <button class="btn" id="manual-btn">Fill in by hand</button>
+            </div>
+            <p class="admin-status" id="extract-status"></p>
+
+            <form id="opp-form" class="admin-form" hidden>
+                <input type="hidden" id="f-id">
+                <input type="hidden" id="f-source">
+                <div class="admin-grid">
+                    <div class="admin-field admin-span">
+                        <label class="admin-label" for="f-title">Title *</label>
+                        <input class="search-input admin-input" id="f-title" required>
+                    </div>
+                    <div class="admin-field">
+                        <label class="admin-label" for="f-category">Category *</label>
+                        <select class="search-input admin-input" id="f-category">
+                            {% for category in categories %}<option value="{{ category }}">{{ category }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="admin-field">
+                        <label class="admin-label" for="f-organization">Organization</label>
+                        <input class="search-input admin-input" id="f-organization">
+                    </div>
+                    <div class="admin-field">
+                        <label class="admin-label" for="f-deadline">Deadline</label>
+                        <input class="search-input admin-input" id="f-deadline" placeholder="e.g. 30 November 2026 or Rolling">
+                    </div>
+                    <div class="admin-field">
+                        <label class="admin-label" for="f-apply-link">Apply link</label>
+                        <input class="search-input admin-input" id="f-apply-link" type="url" placeholder="Where people apply">
+                    </div>
+                    <div class="admin-field admin-span">
+                        <label class="admin-label" for="f-url">Opportunity page link *</label>
+                        <input class="search-input admin-input" id="f-url" type="url" required>
+                    </div>
+                    <div class="admin-field admin-span">
+                        <label class="admin-label" for="f-description">Summary</label>
+                        <textarea class="search-input admin-input" id="f-description" rows="3" maxlength="600"></textarea>
+                    </div>
+                    <div class="admin-field">
+                        <label class="admin-label" for="f-eligibility">Who can apply (one per line)</label>
+                        <textarea class="search-input admin-input" id="f-eligibility" rows="5"></textarea>
+                    </div>
+                    <div class="admin-field">
+                        <label class="admin-label" for="f-documents">Required documents (one per line)</label>
+                        <textarea class="search-input admin-input" id="f-documents" rows="5"></textarea>
+                    </div>
+                    <label class="admin-check admin-span">
+                        <input type="checkbox" id="f-verified"> Mark as verified (you've checked it's genuine)
+                    </label>
+                </div>
+                <div class="admin-row admin-actions">
+                    <button class="btn" type="button" id="cancel-btn">Cancel</button>
+                    <button class="btn" type="button" id="save-pending-btn">Save for review</button>
+                    <button class="btn btn-primary" type="submit" id="publish-btn"><i class="google-symbols">publish</i> Publish</button>
+                </div>
+            </form>
+        </section>
+
+        <!-- Listings -->
+        <section class="admin-card">
+            <div class="admin-row admin-toolbar">
+                <div class="filter-group">
+                    <button class="filter-btn active" data-status="pending">Pending review <span id="pending-count"></span></button>
+                    <button class="filter-btn" data-status="published">Published <span id="published-count"></span></button>
+                </div>
+                <div class="admin-row">
+                    <input class="search-input admin-input admin-search" id="admin-search" placeholder="Filter...">
+                    <button class="btn" id="sync-btn" title="Fetch RSS feeds and the latest Apify results now"><i class="google-symbols">sync</i> Sync now</button>
+                </div>
+            </div>
+            <div id="admin-list" class="admin-list"></div>
+        </section>
+        {% endif %}
+    </div>
+
+    <div class="toast-container" id="toast-container"></div>
+    {% if logged_in %}
+    <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+    {% endif %}
+</body>
+</html>
