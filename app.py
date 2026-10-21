@@ -1,12 +1,10 @@
 from flask import Flask, render_template, jsonify, request
 import aggregator
-import os
-import sqlite3
+import db
 import threading
 import time
 
 app = Flask(__name__)
-DATABASE = aggregator.DATABASE
 
 # Minimum gap between feed syncs, so repeated clicks can't hammer the source sites
 SYNC_COOLDOWN_SECONDS = 10 * 60
@@ -31,18 +29,8 @@ def run_sync():
     finally:
         _sync_lock.release()
 
-# Pull fresh listings in the background on startup; the hosted disk is wiped on every restart
+# Pull fresh listings in the background on startup, so a fresh deploy isn't limited to the seed list
 threading.Thread(target=run_sync, daemon=True).start()
-
-def query_db(query, args=(), one=False):
-    """Helper to query the database and return dictionary results."""
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-    cur.execute(query, args)
-    rv = cur.fetchall()
-    conn.close()
-    return (rv[0] if rv else None) if one else rv
 
 @app.route('/')
 def index():
@@ -97,11 +85,13 @@ def api_generate_linkedin():
     data = request.get_json() or {}
     opportunity_id = data.get('opportunity_id')
     
-    if not opportunity_id:
-        return jsonify({"error": "Missing opportunity_id"}), 400
-        
+    try:
+        opportunity_id = int(opportunity_id)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Missing or invalid opportunity_id"}), 400
+
     # Fetch opportunity details
-    opp_row = query_db("SELECT * FROM opportunities WHERE id = ?", (opportunity_id,), one=True)
+    opp_row = db.query("SELECT * FROM opportunities WHERE id = ?", (opportunity_id,), one=True)
     if not opp_row:
         return jsonify({"error": "Opportunity not found"}), 404
         

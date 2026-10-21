@@ -1,5 +1,3 @@
-import os
-import sqlite3
 import re
 import xml.etree.ElementTree as ET
 from datetime import datetime
@@ -7,8 +5,7 @@ import html
 import requests
 from bs4 import BeautifulSoup
 
-# Absolute path so the app works no matter which directory it is started from
-DATABASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'opportunities.db')
+import db
 
 # Predefined high-quality opportunities for Nigerians (reliable seeds)
 CURATED_OPPORTUNITIES = [
@@ -123,62 +120,27 @@ CURATED_OPPORTUNITIES = [
 ]
 
 def init_db():
-    """Initializes the SQLite database and seeds it if it's empty."""
-    conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
+    """Creates the tables and seeds the curated list if the database is empty."""
+    db.init_schema()
     
-    # Create opportunities table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS opportunities (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            category TEXT NOT NULL,
-            organization TEXT,
-            description TEXT,
-            url TEXT UNIQUE NOT NULL,
-            deadline TEXT,
-            source TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    # Seed if empty
-    cursor.execute('SELECT COUNT(*) FROM opportunities')
-    if cursor.fetchone()[0] == 0:
-        for opp in CURATED_OPPORTUNITIES:
-            cursor.execute('''
-                INSERT INTO opportunities (title, category, organization, description, url, deadline, source)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (opp['title'], opp['category'], opp['organization'], opp['description'], opp['url'], opp['deadline'], opp['source']))
-        conn.commit()
+    if db.query('SELECT COUNT(*) AS n FROM opportunities', one=True)['n'] == 0:
+        db.insert_opportunities(CURATED_OPPORTUNITIES)
         print("Database initialized and seeded successfully.")
     else:
         print("Database already contains opportunities.")
-        
-    conn.close()
 
 def get_opportunities(category_filter=None):
     """Retrieves opportunities from the database with optional filtering."""
-    conn = sqlite3.connect(DATABASE)
-    # Return dictionary results for easy JSON serialization
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-
-    query = "SELECT * FROM opportunities"
+    sql = "SELECT * FROM opportunities"
     params = []
-
+    
     if category_filter:
-        query += " WHERE category = ?"
+        sql += " WHERE category = ?"
         params.append(category_filter)
-
-    query += " ORDER BY created_at DESC, id DESC"
-
-    cursor.execute(query, params)
-    rows = cursor.fetchall()
-
-    results = [dict(row) for row in rows]
-    conn.close()
-    return results
+        
+    sql += " ORDER BY created_at DESC, id DESC"
+    
+    return db.query(sql, params)
 
 def clean_html(raw_html):
     """Removes HTML tags and cleans up strings."""
@@ -340,26 +302,13 @@ def fetch_and_update_opportunities():
         ("https://opportunitydesk.org/feed/", "Opportunity Desk")
     ]
     
-    conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
-    
     new_count = 0
     for feed_url, source_name in feeds:
         print(f"Fetching updates from {source_name}...")
         opps = parse_rss_feed(feed_url, source_name)
-        for opp in opps:
-            try:
-                cursor.execute('''
-                    INSERT INTO opportunities (title, category, organization, description, url, deadline, source)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''', (opp['title'], opp['category'], opp['organization'], opp['description'], opp['url'], opp['deadline'], opp['source']))
-                new_count += 1
-            except sqlite3.IntegrityError:
-                # URL already exists, skip
-                continue
+        # Listings whose URL is already stored are skipped
+        new_count += db.insert_opportunities(opps)
                 
-    conn.commit()
-    conn.close()
     print(f"Fetch completed. Added {new_count} new opportunities.")
     return new_count
 
