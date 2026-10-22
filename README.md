@@ -18,6 +18,7 @@ An AI-first web dashboard that aggregates tech opportunities open to Nigerians. 
 9.  **HorizonScholar Import**: Pulls the latest results of the `seyi_glory/horizon-scholar-scraper` Apify actor. Trusted results go live; the rest wait for admin review.
 10. **Admin Panel** (`/admin`): Paste a link and Gemini reads the page and drafts the listing for review. Approve, edit, unpublish, or delete listings.
 11. **WhatsApp Channel Queue**: Each new published opportunity gets a ready-to-post WhatsApp message (copy, or open in WhatsApp), with posted/skipped tracking, undo, a multi-opportunity roundup, and a "Join our WhatsApp channel" button on the site.
+12. **Reach Stats** (admin): Daily visitors, details opened, apply clicks, visits from WhatsApp, and the most-clicked opportunities. Counts are anonymous (no names, IP addresses, or cookies are stored) and skip browsers with Do Not Track on; see `stats.py`.
 
 ## Project Structure
 *   `app.py`: Flask backend, routing, API endpoints, and LinkedIn generation logic.

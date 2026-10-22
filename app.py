@@ -5,8 +5,11 @@ import aggregator
 import db
 import extractor
 import hmac
+import json
 import os
+import re
 import secrets
+import stats
 import threading
 import time
 
@@ -106,6 +109,41 @@ def api_opportunities():
 def healthz():
     """Health check used by the hosting platform."""
     return jsonify({"status": "ok"})
+
+# Link previews (WhatsApp, Facebook) and crawlers fetch pages too; they aren't readers
+BOT_USER_AGENT = re.compile(r'bot|crawl|spider|slurp|preview|whatsapp|facebookexternalhit|headless|python-requests|curl',
+                            re.IGNORECASE)
+TRACK_LIMIT_PER_MINUTE = 60
+_track_counts = {}
+
+@app.route('/api/track', methods=['POST'])
+def api_track():
+    """Records one anonymous usage event (see stats.py). Always answers 204 so a failure
+    here never affects the page."""
+    if BOT_USER_AGENT.search(request.headers.get('User-Agent', '')):
+        return '', 204
+    # Simple per-client limit, kept in memory only (the address itself is never stored)
+    client, minute = _client_id(), int(time.time() // 60)
+    count_minute, count = _track_counts.get(client, (minute, 0))
+    if count_minute != minute:
+        count = 0
+    if count >= TRACK_LIMIT_PER_MINUTE:
+        return '', 204
+    if len(_track_counts) > 5000:
+        _track_counts.clear()
+    _track_counts[client] = (minute, count + 1)
+
+    # sendBeacon posts text/plain, so parse the body ourselves
+    try:
+        data = json.loads(request.get_data(as_text=True) or '{}')
+    except ValueError:
+        return '', 204
+    if isinstance(data, dict):
+        try:
+            stats.record_event(data.get('kind'), data.get('opportunity_id'), data.get('ref'))
+        except Exception:
+            app.logger.exception("Could not record event")
+    return '', 204
 
 @app.route('/api/opportunities/refresh', methods=['POST'])
 def api_refresh():
@@ -381,6 +419,11 @@ def admin_whatsapp_mark():
     updated = db.execute(f"UPDATE opportunities SET whatsapp_status = ?, whatsapp_at = ? WHERE id IN ({placeholders})",
                          (status, stamp, *ids))
     return jsonify({"success": True, "updated": updated})
+
+@app.route('/admin/api/stats')
+@admin_required
+def admin_stats():
+    return jsonify(stats.get_stats(days=30))
 
 @app.route('/admin/api/sync', methods=['POST'])
 @admin_required

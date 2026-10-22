@@ -5,6 +5,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!card) return;
 
     const siteUrl = card.dataset.siteUrl;
+    // Tagged so the Stats panel can count visitors who came from the channel
+    const siteLink = `${siteUrl}/?ref=wa`;
     const channelUrl = card.dataset.channelUrl;
     const list = document.getElementById('wa-list');
     const recentList = document.getElementById('wa-recent-list');
@@ -46,7 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (opp.required_documents && opp.required_documents.length) {
             lines.push('', `*Documents:* ${opp.required_documents.slice(0, 6).map(plain).join(', ')}`);
         }
-        lines.push('', `👉 Apply: ${opp.apply_link || opp.url}`, '', `More opportunities: ${siteUrl}`);
+        lines.push('', `👉 Apply: ${opp.apply_link || opp.url}`, '', `More opportunities: ${siteLink}`);
         return lines.join('\n');
     }
 
@@ -57,7 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
             lines.push('', `${i + 1}. ${CATEGORY_EMOJI[opp.category] || '📌'} *${plain(opp.title)}*${opp.is_verified ? ' ✅' : ''}`,
                 `   ${deadlineLine(opp)}`, `   👉 ${opp.apply_link || opp.url}`);
         });
-        lines.push('', `See all opportunities: ${siteUrl}`);
+        lines.push('', `See all opportunities: ${siteLink}`);
         if (channelUrl) lines.push(`Share this channel: ${channelUrl}`);
         return lines.join('\n');
     }

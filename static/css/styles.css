@@ -970,3 +970,248 @@ body.light-mode .nigeria-badge {
     color: #006b3f;
     background: rgba(0, 135, 81, 0.1);
 }
+
+/* Reach stats (admin) */
+:root {
+    --chart-accent: #8b5cf6;
+}
+
+body.light-mode {
+    --chart-accent: #7c3aed;
+}
+
+#stats-card.is-loading .stat-tiles,
+#stats-card.is-loading .stats-charts,
+#stats-card.is-loading .stats-grid {
+    opacity: 0.5;
+    transition: opacity 0.2s;
+}
+
+.stat-tiles {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin: 1rem 0 1.5rem;
+}
+
+.stat-tile {
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    padding: 1rem 1.1rem;
+}
+
+.stat-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: 600;
+    line-height: 1.2;
+    margin: 0.25rem 0;
+    color: var(--text-primary);
+}
+
+.stat-sub {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.stats-charts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: 3fr 2fr;
+    gap: 1.5rem;
+}
+
+.chart-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+}
+
+.col-chart {
+    position: relative;
+    /* reserved strip for the hover tooltip, so it never covers the title or the bars */
+    padding-top: 2.2rem;
+}
+
+.col-plot {
+    position: relative;
+    height: 160px;
+    margin-left: 2.5rem;
+}
+
+.col-grid {
+    position: absolute;
+    left: 0;
+    right: 0;
+    border-top: 1px solid var(--border-color);
+}
+
+.col-tick {
+    position: absolute;
+    left: -2.5rem;
+    width: 2.1rem;
+    text-align: right;
+    transform: translateY(-50%);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.col-columns {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    gap: 2px;
+}
+
+.col-hit {
+    flex: 1;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    outline: none;
+}
+
+.col-bar {
+    width: min(24px, 80%);
+    background: var(--chart-accent);
+    border-radius: 4px 4px 0 0;
+}
+
+.col-hit.is-active .col-bar,
+.col-hit:focus-visible .col-bar {
+    filter: brightness(1.25);
+}
+
+.col-hit:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--border-color);
+    border-radius: 4px;
+}
+
+.col-axis {
+    display: flex;
+    justify-content: space-between;
+    margin: 0.4rem 0 0 2.5rem;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.chart-tooltip {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+    background: var(--bg-dark);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.35rem 0.6rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    pointer-events: none;
+    box-shadow: var(--box-shadow-glow);
+}
+
+.chart-tooltip strong {
+    color: var(--text-primary);
+}
+
+.chart-table {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.chart-table summary {
+    cursor: pointer;
+    color: var(--text-muted);
+}
+
+.chart-table table,
+.stats-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+}
+
+.chart-table th,
+.chart-table td,
+.stats-table th,
+.stats-table td {
+    text-align: left;
+    padding: 0.4rem 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-secondary);
+}
+
+.stats-table th {
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.stats-table .num,
+.chart-table td:last-child {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.stats-opp {
+    display: block;
+    color: var(--text-primary);
+}
+
+.stats-meta {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.bar-row {
+    display: grid;
+    grid-template-columns: 7rem 1fr 3rem;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.85rem;
+}
+
+.bar-label {
+    color: var(--text-secondary);
+}
+
+.bar-track {
+    height: 14px;
+}
+
+.bar-fill {
+    height: 100%;
+    min-width: 2px;
+    background: var(--chart-accent);
+    border-radius: 0 4px 4px 0;
+}
+
+.bar-value {
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 768px) {
+    .stat-tiles {
+        grid-template-columns: 1fr 1fr;
+    }
+    .stats-charts,
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+}

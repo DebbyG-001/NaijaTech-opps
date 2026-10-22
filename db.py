@@ -176,3 +176,16 @@ def init_schema():
     for name, definition in EXTRA_COLUMNS.items():
         if name not in existing:
             execute(f'ALTER TABLE opportunities ADD COLUMN {name} {definition}')
+
+    # Anonymous usage counts for the admin Stats panel: no IPs, names, or cookies are stored
+    execute(f'''
+        CREATE TABLE IF NOT EXISTS events (
+            {id_column},
+            day TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            opportunity_id INTEGER,
+            ref TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    execute('CREATE INDEX IF NOT EXISTS idx_events_day ON events (day)')

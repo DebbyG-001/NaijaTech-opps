@@ -47,6 +47,38 @@
         </section>
 
         {% else %}
+        <!-- Reach stats -->
+        <section class="admin-card" id="stats-card">
+            <div class="admin-row admin-toolbar">
+                <h3 style="margin: 0;"><i class="google-symbols">insights</i> Reach <span class="admin-hint" style="margin: 0;">last 30 days</span></h3>
+                <button class="btn" id="stats-refresh"><i class="google-symbols">refresh</i> Refresh</button>
+            </div>
+            <div class="stat-tiles" id="stat-tiles"></div>
+            <div class="stats-charts">
+                <div class="chart-block">
+                    <h4 class="chart-title">Visitors per day</h4>
+                    <div class="col-chart" id="chart-visitors"></div>
+                </div>
+                <div class="chart-block">
+                    <h4 class="chart-title">Apply clicks per day</h4>
+                    <div class="col-chart" id="chart-apply"></div>
+                </div>
+            </div>
+            <div class="stats-grid">
+                <div class="chart-block">
+                    <h4 class="chart-title">Most-clicked opportunities</h4>
+                    <div id="stats-top"></div>
+                </div>
+                <div class="chart-block">
+                    <h4 class="chart-title">Apply clicks by category</h4>
+                    <div id="stats-category"></div>
+                    <h4 class="chart-title" style="margin-top: 1.25rem;">Apply clicks by region</h4>
+                    <div id="stats-region"></div>
+                </div>
+            </div>
+            <p class="admin-hint" style="margin: 1rem 0 0;">Anonymous counts: no names, IP addresses, or cookies are stored. A visitor is one device per day. "From WhatsApp" counts visits that came through links in our channel posts.</p>
+        </section>
+
         <!-- Add from a link -->
         <section class="admin-card">
             <h3><i class="google-symbols">add_link</i> Add an opportunity from a link</h3>
@@ -168,6 +200,7 @@
     {% if logged_in %}
     <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
     <script src="{{ url_for('static', filename='js/whatsapp.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/stats.js') }}"></script>
     {% endif %}
 </body>
 </html>

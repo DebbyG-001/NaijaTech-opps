@@ -37,6 +37,17 @@ document.addEventListener('DOMContentLoaded', () => {
         'Job': '#f59e0b'          // amber
     };
 
+    // Anonymous reach counts (see stats.py): where the visit came from, then one
+    // "visit" per device per day and a "pageview" per load
+    const visitRef = detectRef();
+    let detailsOpp = null;
+    const todayKey = new Date().toISOString().slice(0, 10);
+    if (storageGet('seen_day') !== todayKey) {
+        storageSet('seen_day', todayKey);
+        track('visit');
+    }
+    track('pageview');
+
     // Load Initial Data
     fetchOpportunities();
 
@@ -300,7 +311,42 @@ document.addEventListener('DOMContentLoaded', () => {
         // Only show a separate "Full listing" button when it differs from the apply link
         sourceLink.style.display = opp.apply_link && opp.apply_link !== opp.url ? '' : 'none';
 
+        detailsOpp = opp;
+        track('details', opp.id);
         detailsModal.classList.add('active');
+    }
+
+    document.getElementById('details-apply-link').addEventListener('click', () => {
+        if (detailsOpp) track('apply', detailsOpp.id);
+    });
+
+    // Links in our WhatsApp posts carry ?ref=wa; remember it for this visit, then tidy the address bar
+    function detectRef() {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('ref') === 'wa') {
+                sessionStorage.setItem('visit_ref', 'whatsapp');
+                params.delete('ref');
+                const query = params.toString();
+                history.replaceState(null, '', window.location.pathname + (query ? `?${query}` : '') + window.location.hash);
+            }
+            return sessionStorage.getItem('visit_ref') || 'other';
+        } catch (e) {
+            return 'other';
+        }
+    }
+
+    // Fire-and-forget; respects the browser's Do Not Track setting and never affects the page
+    function track(kind, opportunityId = null) {
+        if (navigator.doNotTrack === '1' || window.doNotTrack === '1') return;
+        try {
+            fetch('/api/track', {
+                method: 'POST',
+                keepalive: true,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ kind, opportunity_id: opportunityId, ref: visitRef }),
+            }).catch(() => {});
+        } catch (e) { /* tracking is best-effort */ }
     }
 
     // Toggle Bookmark (stored in this browser)
